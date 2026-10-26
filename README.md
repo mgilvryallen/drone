@@ -5,6 +5,7 @@ A shruti-box style drone to practice against. Pick a key, mix in whichever voice
 **Use it:** https://mgilvryallen.github.io/drone/
 
 - **Just intonation:** every voice is a whole-number ratio of the root (fifth 3:2, fourth 4:3, octaves 2:1 and so on), so it rings clean instead of equal-tempered.
+- **Presets** to start from: Front Porch, Cross A (for AEAE), Sawmill (modal G), Pipe Drones, Modal E, Om (136.1 Hz), Singing Bowl and Deep Rest.
 - **Ten voices**, each with its own level slider: low root, low 4th, root, 4th, 5th, 6th, ♭7th, octave, 9th and 10th. **reset levels** puts them back where they started.
 - **Mingle:** now and then, a voice strays, and finds its way back.
 - **Fine tune** up or down by single cents (±50). The slider catches on A = 432, 435, 440, 442, 443 and 444.
