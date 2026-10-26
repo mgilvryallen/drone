@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Drone</title>
+    <meta name="description" content="A shruti-box style drone for practicing, in just intonation, with fine tuning.">
+    <meta name="theme-color" content="#f7f3e9">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Drone">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/icon-180.png">
+    <style>
+        @font-face {
+            font-family: 'Rug Pull';
+            src: url('fonts/TAYRugPull.otf') format('opentype');
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Lumios Typewriter';
+            src: url('fonts/LumiosTypewriter-Old.ttf') format('truetype');
+            font-display: swap;
+        }
+
+        :root {
+            --parchment: #f7f3e9;
+            --paper: #fffdf7;
+            --ink: #2c2416;
+            --heading: #4a3f2f;
+            --green: #3d5a42;
+            --tan: #8b7759;
+            --light-tan: #c9bda5;
+            --muted: #6b5d4f;
+            --rust: #a0522d;
+            --ochre: #b07d2a;
+            --woad: #3e5f8a;
+            --indigo: #34466e;
+            --plum: #7b4b6a;
+            --teal: #2f6f6b;
+            --slate: #586878;
+            --berry: #94404f;
+            --moss: #6b7a3a;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Lumios Typewriter', Georgia, serif;
+            font-size: 17px;
+            line-height: 1.6;
+            color: var(--ink);
+            background-color: var(--parchment);
+            background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139, 119, 89, 0.02) 2px, rgba(139, 119, 89, 0.02) 4px);
+            padding: calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 440px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin: 10px 0 24px;
+        }
+
+        header img {
+            width: 56px;
+            height: 56px;
+        }
+
+        h1 {
+            font-family: 'Rug Pull', Georgia, serif;
+            font-weight: normal;
+            font-size: 40px;
+            letter-spacing: 1px;
+            color: var(--heading);
+            line-height: 1.1;
+        }
+
+        h2 {
+            font-family: 'Rug Pull', Georgia, serif;
+            font-weight: normal;
+            font-size: 22px;
+            color: var(--heading);
+            margin-bottom: 12px;
+        }
+
+        .card {
+            background: var(--paper);
+            border: 1px solid var(--light-tan);
+            border-top: 4px solid var(--accent, var(--light-tan));
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            color: var(--accent, var(--heading));
+        }
+
+        a {
+            color: var(--green);
+        }
+
+        /* ---- Play ---- */
+
+        .player {
+            text-align: center;
+            isolation: isolate; /* keeps the halo behind the button but in front of the card */
+        }
+
+        .play-btn {
+            position: relative;
+            width: 132px;
+            height: 132px;
+            margin: 6px auto 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: var(--rust);
+            color: var(--parchment);
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 0 0 5px var(--paper), 0 0 0 7px var(--ochre);
+        }
+
+        .play-btn svg {
+            width: 50px;
+            height: 50px;
+            fill: currentColor;
+        }
+
+        .play-btn:hover {
+            background: #8a4524;
+        }
+
+        /* While playing, the ring breathes out and back like a bellows, and a soft halo swells behind it */
+        .play-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: var(--green);
+            opacity: 0;
+            z-index: -1;
+        }
+
+        .playing .play-btn {
+            background: var(--green);
+            animation: breathe 4.5s ease-in-out infinite;
+        }
+
+        .playing .play-btn:hover {
+            background: #2f4733;
+        }
+
+        .playing .play-btn::after {
+            animation: halo 4.5s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { box-shadow: 0 0 0 5px var(--paper), 0 0 0 7px var(--ochre); }
+            50% { box-shadow: 0 0 0 11px var(--paper), 0 0 0 14px var(--ochre); }
+        }
+
+        @keyframes halo {
+            0%, 100% { transform: scale(1); opacity: 0; }
+            50% { transform: scale(1.32); opacity: 0.16; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .playing .play-btn, .playing .play-btn::after { animation: none; }
+        }
+
+        .play-label {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 15px;
+            color: var(--muted);
+        }
+
+        .readout {
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        /* ---- Pickers ---- */
+
+        .key-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+
+        .seg {
+            display: flex;
+            gap: 6px;
+        }
+
+        .seg button {
+            flex: 1;
+        }
+
+        .chip {
+            font-family: 'Rug Pull', Georgia, serif;
+            font-size: 17px;
+            letter-spacing: 0.5px;
+            padding: 8px 4px;
+            min-height: 42px;
+            background: transparent;
+            border: 1px solid var(--light-tan);
+            color: var(--heading);
+            cursor: pointer;
+        }
+
+        .chip.small {
+            font-size: 14px;
+        }
+
+        .chip.selected {
+            background: var(--accent, var(--heading));
+            border-color: var(--accent, var(--heading));
+            color: var(--parchment);
+        }
+
+        .voice-row {
+            display: grid;
+            grid-template-columns: 102px 1fr;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .voice-row .chip {
+            text-align: left;
+            padding-left: 9px;
+            line-height: 1.15;
+            white-space: nowrap;
+        }
+
+        .card-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .mingle {
+            margin-top: 18px;
+            padding-top: 14px;
+            border-top: 1px dotted var(--light-tan);
+        }
+
+        .hint {
+            color: var(--muted);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .voice-row .ratio {
+            display: block;
+            font-family: 'Lumios Typewriter', Georgia, serif;
+            font-size: 12px;
+            opacity: 0.75;
+        }
+
+        .voice-row input[type="range"] {
+            flex: 1;
+            accent-color: var(--accent);
+        }
+
+        .voice-row.off input {
+            opacity: 0.35;
+        }
+
+        .sub-label {
+            color: var(--muted);
+            font-size: 15px;
+            margin-bottom: 6px;
+        }
+
+        /* ---- Sliders ---- */
+
+        .slider-row {
+            margin-bottom: 16px;
+        }
+
+        .slider-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .slider-head {
+            display: flex;
+            justify-content: space-between;
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        .slider-ends {
+            display: flex;
+            justify-content: space-between;
+            color: var(--tan);
+            font-size: 13px;
+            margin-top: -2px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--green);
+            height: 32px;
+        }
+
+        .fine {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .fine input {
+            flex: 1;
+        }
+
+        .step-btn {
+            width: 42px;
+            height: 42px;
+            flex: none;
+            background: transparent;
+            border: 1px solid var(--light-tan);
+            color: var(--heading);
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .cents {
+            text-align: center;
+            font-family: 'Rug Pull', Georgia, serif;
+            font-size: 26px;
+            color: var(--heading);
+        }
+
+        .cents-sub {
+            text-align: center;
+            color: var(--muted);
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .ticks {
+            position: relative;
+            height: 18px;
+            margin: -4px 61px 10px;
+        }
+
+        .ticks span {
+            position: absolute;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: var(--tan);
+            white-space: nowrap;
+        }
+
+        .ticks span::before {
+            content: '';
+            display: block;
+            width: 1px;
+            height: 5px;
+            margin: 0 auto 1px;
+            background: var(--tan);
+        }
+
+        .ticks span.on {
+            color: var(--woad);
+            font-weight: bold;
+        }
+
+        .presets {
+            display: flex;
+            gap: 5px;
+        }
+
+        .presets .chip {
+            flex: 1 1 0;
+            min-width: 0;
+            min-height: 36px;
+            padding: 4px;
+            font-size: 14px;
+        }
+
+        .link-btn {
+            background: none;
+            border: none;
+            color: var(--green);
+            font-family: inherit;
+            font-size: 14px;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .note {
+            color: var(--muted);
+            font-size: 14px;
+            text-align: center;
+            margin-top: -6px;
+            margin-bottom: 20px;
+        }
+
+        .credit {
+            text-align: center;
+            margin-top: 24px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img src="icons/icon.svg" alt="">
+            <h1>Drone</h1>
+        </header>
+
+        <div class="card player" id="player" style="--accent: var(--rust)">
+            <button class="play-btn" id="playBtn" onclick="togglePlay()" aria-label="Play drone"></button>
+            <div class="play-label" id="playLabel">tap to play</div>
+            <div class="readout" id="readout"></div>
+        </div>
+
+        <div class="card" style="--accent: var(--rust)">
+            <h2>Key</h2>
+            <div class="key-grid" id="keyGrid"></div>
+            <div class="sub-label">Octave</div>
+            <div class="seg" id="octaveSeg" style="--accent: var(--heading)"></div>
+        </div>
+
+        <div class="card" style="--accent: var(--woad)">
+            <h2>Fine Tune</h2>
+            <div class="cents" id="centsText">0 cents</div>
+            <div class="cents-sub"><span id="aRef">A = 440.0 Hz</span> · <button class="link-btn" onclick="setCents(0)">reset</button></div>
+            <div class="fine">
+                <button class="step-btn" onclick="stepCents(-1)" aria-label="One cent lower">−</button>
+                <input type="range" id="cents" min="-50" max="50" step="0.1" oninput="slideCents(Number(this.value))" aria-label="Fine tune in cents">
+                <button class="step-btn" onclick="stepCents(1)" aria-label="One cent higher">+</button>
+            </div>
+            <div class="ticks" id="ticks"></div>
+            <div class="presets" id="presets"></div>
+        </div>
+
+        <div class="card" style="--accent: var(--ochre)">
+            <div class="card-head"><h2>Voices</h2><button class="link-btn" onclick="resetLevels()">reset levels</button></div>
+            <div id="voices"></div>
+            <div class="slider-row mingle">
+                <div class="slider-head"><span>Mingle</span></div>
+                <input type="range" id="mingle" min="0" max="100" oninput="setMingle(Number(this.value))" aria-label="Mingle">
+                <div class="slider-ends"><span>off</span><span>restless</span></div>
+                <p class="hint">Now and then, a voice strays, and finds its way back.</p>
+            </div>
+        </div>
+
+        <div class="card" style="--accent: var(--green)">
+            <div class="card-head"><h2>Sound</h2><button class="link-btn" onclick="resetSound()">reset</button></div>
+            <div class="slider-row">
+                <div class="slider-head"><span>Tone</span></div>
+                <input type="range" id="tone" min="0" max="100" oninput="setSetting('tone', Number(this.value))" aria-label="Tone">
+                <div class="slider-ends"><span>dark</span><span>bright</span></div>
+            </div>
+            <div class="slider-row">
+                <div class="slider-head"><span>Breath</span></div>
+                <input type="range" id="breath" min="0" max="100" oninput="setSetting('breath', Number(this.value))" aria-label="Breath">
+                <div class="slider-ends"><span>still</span><span>shimmering</span></div>
+            </div>
+            <div class="slider-row">
+                <div class="slider-head"><span>Volume</span></div>
+                <input type="range" id="volume" min="0" max="100" oninput="setSetting('volume', Number(this.value))" aria-label="Volume">
+            </div>
+        </div>
+
+        <p class="note" id="lockNote">Lock your screen and the drone keeps playing.</p>
+
+        <div class="credit">
+            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a>
+        </div>
+    </div>
+
+    <script>
+        const SETTINGS_KEY = 'droneBrotherSettings';
+        const KEYS = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+        const OCTAVES = [['Low', 2], ['Middle', 3], ['High', 4]];
+
+        // Just intonation: every voice is a whole-number ratio of the root, low to high.
+        // level is where each voice's slider starts: the root leads, the color tones sit underneath.
+        // The 6th is 27:16 (a pure whole step above the 5th) rather than 5:3, which sounds flat
+        // against open strings. The 7th is the flat seventh, 16:9 (a pure 4th above the 4th).
+        const VOICES = [
+            { id: 'low', label: 'Low root', ratio: [1, 2], level: 70, color: 'var(--indigo)' },
+            { id: 'lowfourth', label: 'Low 4th', ratio: [2, 3], level: 50, color: 'var(--slate)' },
+            { id: 'root', label: 'Root', ratio: [1, 1], level: 100, color: 'var(--rust)' },
+            { id: 'fourth', label: '4th', ratio: [4, 3], level: 55, color: 'var(--ochre)' },
+            { id: 'fifth', label: '5th', ratio: [3, 2], level: 80, color: 'var(--green)' },
+            { id: 'sixth', label: '6th', ratio: [27, 16], level: 40, color: 'var(--plum)' },
+            { id: 'seventh', label: '♭7th', ratio: [16, 9], level: 35, color: 'var(--berry)' },
+            { id: 'high', label: 'Octave', ratio: [2, 1], level: 45, color: 'var(--woad)' },
+            { id: 'ninth', label: '9th', ratio: [9, 4], level: 35, color: 'var(--teal)' },
+            { id: 'tenth', label: '10th', ratio: [5, 2], level: 35, color: 'var(--moss)' }
+        ];
+
+        // Common concert-pitch references, as cents away from A = 440. The slider pulls toward these.
+        const PITCH_REFS = [432, 435, 440, 442, 443, 444].map(hz => ({ hz, cents: 1200 * Math.log2(hz / 440) }));
+        const SNAP_CENTS = 1.5;
+
+        const DEFAULTS = {
+            key: 2, octave: 3, cents: 0,
+            voices: Object.fromEntries(VOICES.map(v => [v.id, v.id === 'root' || v.id === 'fifth'])),
+            levels: Object.fromEntries(VOICES.map(v => [v.id, v.level])),
+            mingle: 0, tone: 45, breath: 40, volume: 70
+        };
+
+        function loadSettings() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+                return {
+                    ...DEFAULTS, ...saved,
+                    voices: { ...DEFAULTS.voices, ...(saved.voices || {}) },
+                    levels: { ...DEFAULTS.levels, ...(saved.levels || {}) }
+                };
+            } catch (e) {
+                return { ...DEFAULTS };
+            }
+        }
+
+        function saveSettings() {
+            try {
+                localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+            } catch (e) {}
+        }
+
+        const settings = loadSettings();
+
+        // #key=A&oct=3 (from Tunes) picks the key on open
+        (function readHash() {
+            const params = new URLSearchParams(location.hash.slice(1));
+            const key = params.get('key');
+            if (key) {
+                const names = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
+                const index = names[key.replace('♯', '#').replace('♭', 'b')];
+                if (index !== undefined) settings.key = index;
+            }
+            const octave = parseInt(params.get('oct'));
+            if (octave >= 2 && octave <= 4) settings.octave = octave;
+        })();
+
+        function rootFrequency() {
+            const midi = 12 * (settings.octave + 1) + settings.key;
+            return 440 * Math.pow(2, (midi - 69) / 12) * Math.pow(2, settings.cents / 1200);
+        }
+
+        function ratioOf(voice) {
+            const [n, d] = voice.ratio;
+            return n / d;
+        }
+
+        // ---- Sound engine ----
+        // Each voice is three slightly detuned "reeds" (like a shruti box's reed banks) playing a
+        // reed-like waveform, panned apart so they beat and shimmer against each other. They run
+        // through a soft saturator (a little buzz), a tone filter, and two nasal resonances. Slow
+        // drifting LFOs move the volume and brightness like a bellows; a little filtered noise adds air.
+        // The same engine runs live, and offline to render the loop that plays while the screen is locked.
+
+        const REED_DETUNES = [[-3.5, 0, 4.2], [-3.3, 0.3, 3.4], [-2.6, 0.4, 3.1], [-3.2, 0.2, 3.5], [-4.1, -0.3, 2.7], [-2.9, 0.5, 4], [-3.4, 0.1, 3.9], [-3, 0.6, 3.8], [-3.6, -0.2, 3.3], [-2.7, 0.3, 3.6]];
+        const WANDER_DETUNES = [[-3.1, 0.2, 3.7]];
+
+        let engine = null;
+        let playing = false;
+
+        // Seeded random so the waveform is the same every time
+        function seededRandom(seed) {
+            return () => {
+                seed = (seed * 16807) % 2147483647;
+                return (seed - 1) / 2147483646;
+            };
+        }
+
+        function reedWave(context) {
+            const count = 48;
+            const real = new Float32Array(count + 1);
+            const imag = new Float32Array(count + 1);
+            const random = seededRandom(7);
+            for (let n = 1; n <= count; n++) {
+                let amp = Math.pow(n, -0.85);
+                if (n % 2 === 0) amp *= 0.72;            // reeds lean toward odd harmonics
+                if (n >= 3 && n <= 7) amp *= 1.3;         // a nasal bump in the low-mid harmonics
+                const phase = random() * Math.PI * 2;     // scattered phases soften the peaks
+                real[n] = amp * Math.sin(phase);
+                imag[n] = amp * Math.cos(phase);
+            }
+            return context.createPeriodicWave(real, imag);
+        }
+
+        function softClipCurve(drive) {
+            const curve = new Float32Array(2048);
+            for (let i = 0; i < curve.length; i++) {
+                const x = (i / (curve.length - 1)) * 2 - 1;
+                curve[i] = Math.tanh(drive * x) / Math.tanh(drive);
+            }
+            return curve;
+        }
+
+        function createEngine(context) {
+            const now = context.currentTime;
+
+            const master = context.createGain();
+            master.gain.value = 0;
+            const compressor = context.createDynamicsCompressor();
+            compressor.threshold.value = -14;
+            compressor.ratio.value = 3;
+            master.connect(compressor).connect(context.destination);
+
+            const bellows = context.createGain();
+            bellows.gain.value = 1;
+            bellows.connect(master);
+
+            const nasal1 = context.createBiquadFilter();
+            nasal1.type = 'peaking';
+            nasal1.frequency.value = 1100;
+            nasal1.Q.value = 1.2;
+            nasal1.gain.value = 4;
+            const nasal2 = context.createBiquadFilter();
+            nasal2.type = 'peaking';
+            nasal2.frequency.value = 2700;
+            nasal2.Q.value = 1.6;
+            nasal2.gain.value = 2.5;
+            nasal1.connect(nasal2).connect(bellows);
+
+            const tone = context.createBiquadFilter();
+            tone.type = 'lowpass';
+            tone.Q.value = 0.6;
+            tone.connect(nasal1);
+
+            const buzz = context.createWaveShaper();
+            buzz.curve = softClipCurve(1.8);
+            buzz.oversample = '2x';
+            buzz.connect(tone);
+
+            // Bellows: two slow LFOs at unrelated rates, so the movement never quite repeats
+            const lfoA = context.createOscillator();
+            lfoA.frequency.value = 0.11;
+            const lfoB = context.createOscillator();
+            lfoB.frequency.value = 0.067;
+            const ampDepth = context.createGain();
+            const filterDepth = context.createGain();
+            const filterDepthB = context.createGain();
+            lfoA.connect(ampDepth).connect(bellows.gain);
+            lfoA.connect(filterDepth).connect(tone.frequency);
+            lfoB.connect(filterDepthB).connect(tone.frequency);
+            lfoA.start(now);
+            lfoB.start(now);
+
+            // Air: looped noise through a band-pass
+            const noiseBuffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
+            const data = noiseBuffer.getChannelData(0);
+            const random = seededRandom(11);
+            for (let i = 0; i < data.length; i++) data[i] = random() * 2 - 1;
+            const noise = context.createBufferSource();
+            noise.buffer = noiseBuffer;
+            noise.loop = true;
+            const air = context.createBiquadFilter();
+            air.type = 'bandpass';
+            air.frequency.value = 1800;
+            air.Q.value = 0.7;
+            const airGain = context.createGain();
+            noise.connect(air).connect(airGain).connect(bellows);
+            noise.start(now);
+
+            const eng = { ctx: context, wave: reedWave(context), buzz, master, tone, nasal2, ampDepth, filterDepth, filterDepthB, airGain, voices: {}, lastRoot: null };
+            // A spare reed bank for Mingle's wandering notes
+            eng.wanderers = WANDER_DETUNES.map(detunes => makeReeds(eng, detunes));
+            return eng;
+        }
+
+        // Three reeds -> level gain -> duck gain (Mingle dips a voice a touch while it's wandering) -> buzz
+        function makeReeds(eng, detunes) {
+            const c = eng.ctx;
+            const gain = c.createGain();
+            gain.gain.value = 0;
+            const duck = c.createGain();
+            gain.connect(duck).connect(eng.buzz);
+            const oscillators = detunes.map((detune, r) => {
+                const osc = c.createOscillator();
+                osc.setPeriodicWave(eng.wave);
+                osc.detune.value = detune;
+                const reedGain = c.createGain();
+                reedGain.gain.value = 0.11;
+                const pan = c.createStereoPanner();
+                pan.pan.value = [-0.45, 0, 0.45][r];
+                osc.connect(reedGain).connect(pan).connect(gain);
+                osc.start(c.currentTime);
+                return osc;
+            });
+            return { gain, duck, oscillators, detunes, busyUntil: -1, sourceId: null };
+        }
+
+        // Voices are only built once they're first turned on, to spare the phone's processor
+        function voiceNodes(eng, voice) {
+            if (!eng.voices[voice.id]) eng.voices[voice.id] = makeReeds(eng, REED_DETUNES[VOICES.indexOf(voice)]);
+            return eng.voices[voice.id];
+        }
+
+        function levelOf(voice) {
+            return settings.voices[voice.id] ? settings.levels[voice.id] / 100 : 0;
+        }
+
+        // With lots of voices on, pull them all down together so the reeds don't pile into the buzz
+        function blendFactor() {
+            const total = VOICES.reduce((sum, voice) => sum + levelOf(voice), 0);
+            return Math.min(1, 1.9 / Math.max(total, 0.001));
+        }
+
+        // Tone: the top of the range opens up more gently than the bottom, so bright isn't harsh
+        function toneCutoff() {
+            const t = settings.tone / 100;
+            const octaves = t <= 0.45 ? t * 4.2 : 1.89 + (t - 0.45) * 3;
+            return 450 * Math.pow(2, octaves);
+        }
+
+        function applyAll(eng, immediate) {
+            if (!eng) return;
+            const t = eng.ctx.currentTime;
+            const glide = immediate ? 0.001 : 0.04;
+            const root = rootFrequency();
+            const blend = blendFactor();
+
+            // A new key or tuning would leave any wandering note stranded, so let it go
+            if (eng.lastRoot && Math.abs(root / eng.lastRoot - 1) > 1e-6) releaseWanderers(eng);
+            eng.lastRoot = root;
+
+            VOICES.forEach(voice => {
+                if (!settings.voices[voice.id] && !eng.voices[voice.id]) return;
+                const { gain, oscillators } = voiceNodes(eng, voice);
+                oscillators.forEach(osc => osc.frequency.setTargetAtTime(root * ratioOf(voice), t, glide));
+                gain.gain.setTargetAtTime(levelOf(voice) * blend, t, immediate ? 0.001 : 0.12);
+            });
+
+            const cutoff = toneCutoff();
+            const breath = settings.breath / 100;
+            eng.tone.frequency.setTargetAtTime(cutoff, t, 0.08);
+            eng.nasal2.gain.setTargetAtTime(2.5 - Math.max(0, settings.tone - 45) / 55 * 2, t, 0.08);
+            // Breath is mostly shimmer: it spreads each voice's three reeds further apart in tuning,
+            // so they beat against each other faster and wider. The bellows sway stays gentle.
+            const spread = 0.35 + breath * 1.9;
+            [...Object.values(eng.voices), ...eng.wanderers].forEach(reeds => {
+                reeds.oscillators.forEach((osc, i) => osc.detune.setTargetAtTime(reeds.detunes[i] * spread, t, immediate ? 0.001 : 0.3));
+            });
+            eng.ampDepth.gain.setTargetAtTime(breath * 0.05, t, 0.2);
+            eng.filterDepth.gain.setTargetAtTime(breath * cutoff * 0.1, t, 0.2);
+            eng.filterDepthB.gain.setTargetAtTime(breath * cutoff * 0.06, t, 0.2);
+            // Air rides with Tone: the brighter it gets, the more breath you hear in the reeds
+            eng.airGain.gain.setTargetAtTime(0.002 + (settings.tone / 100) * 0.02, t, 0.2);
+
+            if (eng === engine && playing && !document.hidden) eng.master.gain.setTargetAtTime(volumeLevel(), t, 0.08);
+        }
+
+        function volumeLevel() {
+            return Math.pow(settings.volume / 100, 1.6) * 0.9;
+        }
+
+        // ---- Mingle ----
+        // A spare reed bank fades in on top of an active voice at the same pitch (so you can't hear
+        // it arrive), takes a slow, gooey slide to a nearby dissonance, leans there briefly, slides
+        // home, and fades out. The voice it grew out of keeps playing, dipped just a little so the
+        // total loudness stays about even. One at a time, at random, spaced-out moments.
+
+        // What each wandering grows out of, where it leans (as a ratio of the root), how often, and
+        // how loud the stray note gets next to its voice. The common ones are kept faint, a shadow
+        // rather than a second voice; the octave and tritone leans were too much at full strength.
+        const MINGLE_MOVES = [
+            { from: 'high', to: 15 / 8, weight: 1, level: 0.32 },        // octave leans down to the major 7th
+            { from: 'fifth', to: 45 / 32, weight: 0.8, level: 0.3 },     // 5th sinks to the tritone
+            { from: 'fourth', to: 45 / 32, weight: 0.8, level: 0.3 },    // 4th rises to the tritone
+            { from: 'tenth', to: 8 / 3, weight: 0.12, level: 0.45 },     // 10th lifts to the 11th
+            { from: 'root', to: 15 / 16, weight: 0.08, level: 0.4 },     // root dips a half step
+            { from: 'root', to: 9 / 8, weight: 0.08, level: 0.4 }        // root climbs a whole step
+        ];
+
+        // Frequency points for a slow-in, slow-out slide (even steps in pitch, not in Hz)
+        function glideCurve(from, to) {
+            const curve = new Float32Array(64);
+            for (let i = 0; i < curve.length; i++) {
+                const x = i / (curve.length - 1);
+                const ease = x * x * x * (x * (x * 6 - 15) + 10);
+                curve[i] = from * Math.pow(to / from, ease);
+            }
+            return curve;
+        }
+
+        // Returns when the wandering will be over, or null if nothing could wander
+        function wander(eng, t0, rand) {
+            if (settings.mingle <= 0 || eng.wanderers.some(w => w.busyUntil > t0)) return null;
+            const moves = MINGLE_MOVES.filter(move => levelOf(VOICES.find(v => v.id === move.from)) > 0);
+            if (!moves.length) return null;
+            let pick = rand() * moves.reduce((sum, move) => sum + move.weight, 0);
+            const move = moves.find(m => (pick -= m.weight) <= 0) || moves[0];
+            const source = VOICES.find(v => v.id === move.from);
+            const wanderer = eng.wanderers[0];
+
+            const root = rootFrequency();
+            const from = root * ratioOf(source);
+            const target = root * move.to;
+            const fadeIn = 1.6;
+            const slide = 1.6 + rand() * 1.0;
+            const hang = 0.4 + rand() * 1.0;
+            const slideBack = slide * 1.1;
+            const fadeOut = 1.4;
+            const away = t0 + fadeIn * 0.85;
+            const back = away + slide + hang;
+            const home = back + slideBack;
+            const end = home + fadeOut;
+            const level = levelOf(source) * blendFactor() * move.level;
+            // Dip the source voice only as much as the stray note adds, so loudness holds steady
+            const dip = 1 - move.level * 0.23;
+
+            wanderer.oscillators.forEach(osc => {
+                osc.frequency.cancelScheduledValues(t0);
+                osc.frequency.setValueAtTime(from, t0);
+                osc.frequency.setValueCurveAtTime(glideCurve(from, target), away, slide);
+                osc.frequency.setValueCurveAtTime(glideCurve(target, from), back, slideBack);
+            });
+            const g = wanderer.gain.gain;
+            g.cancelScheduledValues(t0);
+            g.setValueAtTime(0, t0);
+            g.linearRampToValueAtTime(level, t0 + fadeIn);
+            g.setValueAtTime(level, home);
+            g.linearRampToValueAtTime(0, end);
+
+            const duck = voiceNodes(eng, source).duck.gain;
+            duck.cancelScheduledValues(t0);
+            duck.setValueAtTime(1, t0);
+            duck.linearRampToValueAtTime(dip, t0 + fadeIn);
+            duck.setValueAtTime(dip, home);
+            duck.linearRampToValueAtTime(1, end);
+
+            wanderer.busyUntil = end;
+            wanderer.sourceId = source.id;
+            return end;
+        }
+
+        function releaseWanderers(eng) {
+            const t = eng.ctx.currentTime;
+            eng.wanderers.forEach(w => {
+                if (w.busyUntil <= t) return;
+                w.gain.gain.cancelScheduledValues(t);
+                w.gain.gain.setTargetAtTime(0, t, 0.06);
+                const source = eng.voices[w.sourceId];
+                if (source) {
+                    source.duck.gain.cancelScheduledValues(t);
+                    source.duck.gain.setTargetAtTime(1, t, 0.06);
+                }
+                w.busyUntil = t + 0.4;
+            });
+        }
+
+        // Seconds of plain drone between wanderings: random (sometimes soon, sometimes a long
+        // while), averaging about 70s at the low end of the slider and 25s at the top
+        function mingleGap(rand) {
+            const mean = 75 - 50 * (settings.mingle / 100);
+            return Math.max(6, -mean * Math.log(1 - rand() * 0.98));
+        }
+
+        let mingleTimer = null;
+
+        function scheduleMingle(wait) {
+            clearTimeout(mingleTimer);
+            if (!playing || !settings.mingle) return;
+            mingleTimer = setTimeout(() => {
+                let next = mingleGap(Math.random);
+                if (playing && engine && !document.hidden) {
+                    const now = engine.ctx.currentTime;
+                    const end = wander(engine, now + 0.05, Math.random);
+                    if (end) next += end - now;
+                }
+                scheduleMingle(next);
+            }, (wait === undefined ? mingleGap(Math.random) : wait) * 1000);
+        }
+
+        // ---- Screen-off playback ----
+        // Phones pause live web audio when the screen locks, but they keep playing an ordinary audio
+        // file, like a music app. So on phones, 90 seconds of the current drone (Mingle included) is
+        // rendered into a seamless loop and kept playing silently next to the live sound. When the
+        // screen locks, the loop takes over; when you come back, the live sound does. Changes
+        // re-render the loop a couple of seconds after you stop adjusting.
+
+        const PHONE = matchMedia('(pointer: coarse)').matches;
+        const LOOP_SECONDS = 90;
+        const LOOP_FADE = 4;
+        const loopAudio = new Audio();
+        loopAudio.loop = true;
+        loopAudio.setAttribute('playsinline', '');
+        let loopUrl = null;
+        let loopReady = false;
+        let loopTimer = null;
+        let loopVersion = 0;
+
+        async function renderLoop() {
+            const rate = 32000;
+            const context = new OfflineAudioContext(2, rate * (LOOP_SECONDS + LOOP_FADE), rate);
+            const eng = createEngine(context);
+            applyAll(eng, true);
+            eng.master.gain.value = volumeLevel();
+            if (settings.mingle) {
+                const rand = seededRandom(1 + Math.floor(Math.random() * 100000));
+                // Kept clear of the loop's seam (the first and last few seconds)
+                for (let t = 5 + rand() * 15; t < LOOP_SECONDS - 14; t = (wander(eng, t, rand) || t) + mingleGap(rand));
+            }
+            const buffer = await context.startRendering();
+            return encodeWav(buffer);
+        }
+
+        // Fold the extra seconds at the end back over the start, so the loop point can't be heard
+        function encodeWav(buffer) {
+            const length = buffer.sampleRate * LOOP_SECONDS;
+            const fadeLength = buffer.sampleRate * LOOP_FADE;
+            const channels = [buffer.getChannelData(0), buffer.getChannelData(1)];
+            const out = new DataView(new ArrayBuffer(44 + length * 4));
+            const text = (offset, s) => [...s].forEach((ch, i) => out.setUint8(offset + i, ch.charCodeAt(0)));
+            text(0, 'RIFF');
+            out.setUint32(4, 36 + length * 4, true);
+            text(8, 'WAVEfmt ');
+            out.setUint32(16, 16, true);
+            out.setUint16(20, 1, true);
+            out.setUint16(22, 2, true);
+            out.setUint32(24, buffer.sampleRate, true);
+            out.setUint32(28, buffer.sampleRate * 4, true);
+            out.setUint16(32, 4, true);
+            out.setUint16(34, 16, true);
+            text(36, 'data');
+            out.setUint32(40, length * 4, true);
+            for (let i = 0; i < length; i++) {
+                for (let ch = 0; ch < 2; ch++) {
+                    let sample = channels[ch][i];
+                    if (i < fadeLength) {
+                        const x = i / fadeLength;
+                        sample = sample * Math.sin(x * Math.PI / 2) + channels[ch][length + i] * Math.cos(x * Math.PI / 2);
+                    }
+                    out.setInt16(44 + i * 4 + ch * 2, Math.max(-1, Math.min(1, sample)) * 32767, true);
+                }
+            }
+            return new Blob([out], { type: 'audio/wav' });
+        }
+
+        // A tiny silent file, played on the tap that starts the drone, so the phone lets this
+        // audio element play later without another tap
+        function silentWav() {
+            const out = new DataView(new ArrayBuffer(44 + 800));
+            const text = (offset, s) => [...s].forEach((ch, i) => out.setUint8(offset + i, ch.charCodeAt(0)));
+            text(0, 'RIFF');
+            out.setUint32(4, 36 + 800, true);
+            text(8, 'WAVEfmt ');
+            out.setUint32(16, 16, true);
+            out.setUint16(20, 1, true);
+            out.setUint16(22, 1, true);
+            out.setUint32(24, 8000, true);
+            out.setUint32(28, 16000, true);
+            out.setUint16(32, 2, true);
+            out.setUint16(34, 16, true);
+            text(36, 'data');
+            out.setUint32(40, 800, true);
+            return URL.createObjectURL(new Blob([out], { type: 'audio/wav' }));
+        }
+
+        function refreshLoop(delay) {
+            if (!PHONE || !playing) return;
+            clearTimeout(loopTimer);
+            loopTimer = setTimeout(async () => {
+                const version = ++loopVersion;
+                try {
+                    const blob = await renderLoop();
+                    if (version !== loopVersion || !playing) return;
+                    const oldUrl = loopUrl;
+                    loopUrl = URL.createObjectURL(blob);
+                    loopAudio.muted = !document.hidden;
+                    loopAudio.src = loopUrl;
+                    await loopAudio.play();
+                    loopReady = true;
+                    if (oldUrl) URL.revokeObjectURL(oldUrl);
+                } catch (e) {}
+            }, delay);
+        }
+
+        function updateMediaSession() {
+            if (!('mediaSession' in navigator)) return;
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: `${KEYS[settings.key]} drone`,
+                artist: 'Drone',
+                artwork: [{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }]
+            });
+            navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+        }
+
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.setActionHandler('play', () => { if (!playing) togglePlay(); });
+            navigator.mediaSession.setActionHandler('pause', () => { if (playing) togglePlay(); });
+        }
+
+        // Screen off: the loop takes over. Back on: the live sound fades up under the loop for a
+        // moment, then the loop drops out. They're the same drone, so the switch hides inside it.
+        let handoffTimer = null;
+        document.addEventListener('visibilitychange', async () => {
+            if (!playing || !engine) return;
+            clearTimeout(handoffTimer);
+            const gain = engine.master.gain;
+            if (document.hidden) {
+                if (!loopReady) return;
+                loopAudio.muted = false;
+                gain.cancelScheduledValues(engine.ctx.currentTime);
+                gain.setTargetAtTime(0, engine.ctx.currentTime, 0.15);
+            } else {
+                await engine.ctx.resume();
+                const t = engine.ctx.currentTime;
+                gain.cancelScheduledValues(t);
+                gain.setValueAtTime(0, t);
+                gain.linearRampToValueAtTime(volumeLevel(), t + 0.8);
+                handoffTimer = setTimeout(() => { loopAudio.muted = true; }, 650);
+            }
+        });
+
+        async function togglePlay() {
+            if (!engine) engine = createEngine(new (window.AudioContext || window.webkitAudioContext)());
+            // Play through the iPhone silent switch, like a music app would
+            if (navigator.audioSession) {
+                try { navigator.audioSession.type = 'playback'; } catch (e) {}
+            }
+
+            playing = !playing;
+            const ctx = engine.ctx;
+            const t = ctx.currentTime;
+            if (playing) {
+                applyAll(engine, true);
+                if (PHONE && !loopReady) {
+                    loopAudio.muted = true;
+                    loopAudio.src = silentWav();
+                    loopAudio.play().catch(() => {});
+                }
+                if (document.hidden && loopReady) {
+                    // Started from the lock screen
+                    loopAudio.muted = false;
+                    loopAudio.play().catch(() => {});
+                } else {
+                    await ctx.resume();
+                    engine.master.gain.cancelScheduledValues(ctx.currentTime);
+                    engine.master.gain.setTargetAtTime(volumeLevel(), ctx.currentTime, 0.6);
+                    if (loopReady) loopAudio.play().catch(() => {});
+                }
+                refreshLoop(loopReady ? 0 : 300);
+                scheduleMingle();
+            } else {
+                engine.master.gain.cancelScheduledValues(t);
+                engine.master.gain.setTargetAtTime(0, t, 0.35);
+                releaseWanderers(engine);
+                loopAudio.pause();
+                clearTimeout(loopTimer);
+                clearTimeout(mingleTimer);
+                setTimeout(() => { if (!playing) ctx.suspend(); }, 2500);
+            }
+            updateMediaSession();
+            renderPlayer();
+        }
+
+        // ---- Controls ----
+
+        function changed() {
+            saveSettings();
+            applyAll(engine, false);
+            refreshLoop(2500);
+            render();
+        }
+
+        function setSetting(name, value) {
+            settings[name] = value;
+            if (name === 'key') updateMediaSession();
+            changed();
+        }
+
+        function setKey(index) {
+            setSetting('key', index);
+        }
+
+        function setOctave(octave) {
+            setSetting('octave', octave);
+        }
+
+        function setCents(value) {
+            setSetting('cents', Math.max(-50, Math.min(50, value)));
+        }
+
+        // The slider moves in tenths of a cent, settles on whole cents, and pulls toward the pitch references
+        function slideCents(value) {
+            const near = PITCH_REFS.find(ref => Math.abs(ref.cents - value) <= SNAP_CENTS);
+            if (near && settings.cents !== near.cents && navigator.vibrate) navigator.vibrate(8);
+            setCents(near ? near.cents : Math.round(value));
+        }
+
+        // − and + land on whole cents, even from 432's −31.8
+        function stepCents(direction) {
+            const cents = settings.cents;
+            setCents(direction > 0 ? Math.floor(cents + 0.001) + 1 : Math.ceil(cents - 0.001) - 1);
+        }
+
+        function setMingle(value) {
+            settings.mingle = value;
+            if (!value && engine) releaseWanderers(engine);
+            scheduleMingle();
+            changed();
+        }
+
+        function toggleVoice(id) {
+            settings.voices[id] = !settings.voices[id];
+            if (!Object.values(settings.voices).some(Boolean)) settings.voices.root = true;
+            changed();
+        }
+
+        function resetLevels() {
+            settings.levels = { ...DEFAULTS.levels };
+            changed();
+        }
+
+        function resetSound() {
+            ['tone', 'breath', 'volume'].forEach(name => settings[name] = DEFAULTS[name]);
+            changed();
+        }
+
+        function setLevel(id, value) {
+            settings.levels[id] = value;
+            // Raising a voice's slider turns it on
+            if (value > 0) settings.voices[id] = true;
+            changed();
+        }
+
+        const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.2.7l10.6-6.8a.8.8 0 0 0 0-1.4L9.2 4.5A.8.8 0 0 0 8 5.2z"/></svg>';
+        const PAUSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4.2" height="14" rx="1"/><rect x="13.8" y="5" width="4.2" height="14" rx="1"/></svg>';
+
+        function renderPlayer() {
+            document.getElementById('player').classList.toggle('playing', playing);
+            document.getElementById('playBtn').innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+            document.getElementById('playLabel').textContent = playing ? 'tap to pause' : 'tap to play';
+            document.getElementById('playBtn').setAttribute('aria-label', playing ? 'Pause drone' : 'Play drone');
+        }
+
+        // Built once, so dragging a slider isn't interrupted by a re-render
+        function buildStatic() {
+            document.getElementById('voices').innerHTML = VOICES.map(voice => `
+                <div class="voice-row" id="row-${voice.id}" style="--accent: ${voice.color}">
+                    <button class="chip small" id="chip-${voice.id}" onclick="toggleVoice('${voice.id}')">${voice.label}<span class="ratio">${voice.ratio.join(':')}</span></button>
+                    <input type="range" id="level-${voice.id}" min="0" max="100" oninput="setLevel('${voice.id}', Number(this.value))" aria-label="${voice.label} level">
+                </div>`).join('');
+
+            document.getElementById('ticks').innerHTML = PITCH_REFS.map(ref =>
+                // The 440s sit close together, so only the far ends get numbers; the buttons below name them all
+                `<span id="tick-${ref.hz}" style="left: ${(ref.cents + 50)}%">${[432, 440, 444].includes(ref.hz) ? ref.hz : '&nbsp;'}</span>`
+            ).join('');
+            document.getElementById('presets').innerHTML = PITCH_REFS.map(ref =>
+                `<button class="chip" id="preset-${ref.hz}" onclick="setCents(${ref.cents})">${ref.hz}</button>`
+            ).join('');
+
+            if (!PHONE) document.getElementById('lockNote').hidden = true;
+        }
+
+        function render() {
+            const root = rootFrequency();
+            const octaveName = OCTAVES.find(([, octave]) => octave === settings.octave)[0].toLowerCase();
+            const parts = VOICES.filter(v => settings.voices[v.id]).map(v => `${v.label.toLowerCase()} ${(root * ratioOf(v)).toFixed(1)}`);
+            document.getElementById('readout').innerHTML =
+                `<strong>${KEYS[settings.key]}</strong> · ${octaveName}<br>${parts.join(' · ')} Hz`;
+
+            VOICES.forEach(voice => {
+                const on = settings.voices[voice.id];
+                document.getElementById(`row-${voice.id}`).classList.toggle('off', !on);
+                document.getElementById(`chip-${voice.id}`).classList.toggle('selected', on);
+                document.getElementById(`level-${voice.id}`).value = settings.levels[voice.id];
+            });
+
+            PITCH_REFS.forEach(ref => {
+                const on = Math.abs(ref.cents - settings.cents) < 0.01;
+                document.getElementById(`tick-${ref.hz}`).classList.toggle('on', on);
+                document.getElementById(`preset-${ref.hz}`).classList.toggle('selected', on);
+            });
+
+            document.getElementById('keyGrid').innerHTML = KEYS.map((name, i) =>
+                `<button class="chip${i === settings.key ? ' selected' : ''}" onclick="setKey(${i})">${name}</button>`
+            ).join('');
+            document.getElementById('octaveSeg').innerHTML = OCTAVES.map(([label, octave]) =>
+                `<button class="chip small${octave === settings.octave ? ' selected' : ''}" onclick="setOctave(${octave})">${label}</button>`
+            ).join('');
+            const cents = settings.cents;
+            const centsShown = Number.isInteger(cents) ? String(cents) : cents.toFixed(1);
+            document.getElementById('centsText').textContent = `${cents > 0 ? '+' : ''}${centsShown.replace('-', '−')} cent${Math.abs(cents) === 1 ? '' : 's'}`;
+            document.getElementById('aRef').textContent = `A = ${(440 * Math.pow(2, cents / 1200)).toFixed(1)} Hz`;
+            document.getElementById('cents').value = cents;
+            document.getElementById('mingle').value = settings.mingle;
+            document.getElementById('tone').value = settings.tone;
+            document.getElementById('breath').value = settings.breath;
+            document.getElementById('volume').value = settings.volume;
+        }
+
+        // Skipped on localhost so local edits show up right away
+        if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
+            navigator.serviceWorker.register('sw.js');
+        }
+
+        buildStatic();
+        render();
+        renderPlayer();
+    </script>
+</body>
+</html>
