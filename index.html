@@ -514,7 +514,7 @@
         <p class="note" id="lockNote">Lock your screen and the drone keeps playing.</p>
 
         <div class="credit">
-            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a>
+            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a> · <a href="https://github.com/mgilvryallen/drone" target="_blank">make your own copy</a>
         </div>
     </div>
 
@@ -813,7 +813,7 @@
             // Air rides with Tone: the brighter it gets, the more breath you hear in the reeds
             eng.airGain.gain.setTargetAtTime(0.003 + (settings.tone / 100) * 0.008, t, 0.2);
 
-            if (eng === engine && playing && !document.hidden) eng.master.gain.setTargetAtTime(volumeLevel(), t, 0.08);
+            if (eng === engine && playing && liveAudible && !document.hidden) eng.master.gain.setTargetAtTime(volumeLevel(), t, 0.08);
         }
 
         function volumeLevel() {
@@ -929,7 +929,7 @@
             if (!playing || !settings.mingle) return;
             mingleTimer = setTimeout(() => {
                 let next = mingleGap(Math.random);
-                if (playing && engine && !document.hidden) {
+                if (playing && engine && !document.hidden && liveAudible) {
                     const now = engine.ctx.currentTime;
                     const end = wander(engine, now + 0.05, Math.random);
                     if (end) next += end - now;
@@ -941,14 +941,40 @@
         // ---- Screen-off playback ----
         // Phones pause live web audio when the screen locks, but they keep playing an ordinary audio
         // file, like a music app. So on phones, 90 seconds of the current drone (Mingle included) is
-        // rendered into a seamless loop and kept playing silently next to the live sound. When the
-        // screen locks, the loop takes over; when you come back, the live sound does. Changes
-        // re-render the loop a couple of seconds after you stop adjusting.
+        // rendered into a seamless loop, and that loop is what you hear (see goLoop / goLive below).
+        // An earlier version kept the loop playing muted and unmuted it on lock; iOS stops muted
+        // audio in the background and won't unmute it without a tap, so that never worked.
 
         const PHONE = matchMedia('(pointer: coarse)').matches;
         const LOOP_SECONDS = 90;
         const LOOP_FADE = 4;
+        // ?debug in the URL reports each step of the screen-off handoff to the server's log
+        const DEBUG = location.search.includes('debug');
+        function debug(message) {
+            if (!DEBUG) return;
+            const line = `${new Date().toLocaleTimeString()} ${message} | hidden=${document.hidden} ctx=${engine ? engine.ctx.state : '-'} loop=${loopAudio.paused ? 'paused' : 'playing'}${loopAudio.muted ? ' muted' : ''} ready=${loopReady}`;
+            new Image().src = `log?${encodeURIComponent(line)}&r=${Math.random()}`;
+            try {
+                const lines = JSON.parse(localStorage.getItem('droneDebug') || '[]').concat(line).slice(-60);
+                localStorage.setItem('droneDebug', JSON.stringify(lines));
+                showDebug(lines);
+            } catch (e) {}
+        }
+
+        function showDebug(lines) {
+            let box = document.getElementById('debugLog');
+            if (!box) {
+                box = document.createElement('pre');
+                box.id = 'debugLog';
+                box.style.cssText = 'white-space: pre-wrap; font-size: 11px; background: #fff; border: 1px solid #c9bda5; padding: 8px; margin: 16px auto; max-width: 440px; max-height: 50vh; overflow: auto;';
+                box.ondblclick = () => { localStorage.removeItem('droneDebug'); box.textContent = ''; };
+                document.body.appendChild(box);
+            }
+            box.textContent = lines.join('\n');
+        }
+
         const loopAudio = new Audio();
+        if (DEBUG) ['play', 'playing', 'pause', 'ended', 'error', 'stalled', 'suspend', 'volumechange'].forEach(type => loopAudio.addEventListener(type, () => debug('audio ' + type + (loopAudio.error ? ' code ' + loopAudio.error.code : ''))));
         loopAudio.loop = true;
         loopAudio.setAttribute('playsinline', '');
         let loopUrl = null;
@@ -1006,10 +1032,10 @@
         // A tiny silent file, played on the tap that starts the drone, so the phone lets this
         // audio element play later without another tap
         function silentWav() {
-            const out = new DataView(new ArrayBuffer(44 + 800));
+            const out = new DataView(new ArrayBuffer(44 + 16000));
             const text = (offset, s) => [...s].forEach((ch, i) => out.setUint8(offset + i, ch.charCodeAt(0)));
             text(0, 'RIFF');
-            out.setUint32(4, 36 + 800, true);
+            out.setUint32(4, 36 + 16000, true);
             text(8, 'WAVEfmt ');
             out.setUint32(16, 16, true);
             out.setUint16(20, 1, true);
@@ -1019,26 +1045,33 @@
             out.setUint16(32, 2, true);
             out.setUint16(34, 16, true);
             text(36, 'data');
-            out.setUint32(40, 800, true);
+            out.setUint32(40, 16000, true);
             return URL.createObjectURL(new Blob([out], { type: 'audio/wav' }));
         }
 
         function refreshLoop(delay) {
             if (!PHONE || !playing) return;
             clearTimeout(loopTimer);
+            // Any change after this makes the recording stale, even one made while it renders
+            const version = ++loopVersion;
             loopTimer = setTimeout(async () => {
-                const version = ++loopVersion;
                 try {
+                    debug('render start');
                     const blob = await renderLoop();
+                    debug('render done ' + blob.size);
                     if (version !== loopVersion || !playing) return;
                     const oldUrl = loopUrl;
                     loopUrl = URL.createObjectURL(blob);
-                    loopAudio.muted = !document.hidden;
                     loopAudio.src = loopUrl;
+                    loopAudio.muted = false;
                     await loopAudio.play();
                     loopReady = true;
+                    loopFresh = true;
+                    goLoop();
                     if (oldUrl) URL.revokeObjectURL(oldUrl);
-                } catch (e) {}
+                } catch (e) {
+                    debug('loop failed: ' + e.name + ' ' + e.message);
+                }
             }, delay);
         }
 
@@ -1057,26 +1090,45 @@
             navigator.mediaSession.setActionHandler('pause', () => { if (playing) togglePlay(); });
         }
 
-        // Screen off: the loop takes over. Back on: the live sound fades up under the loop for a
-        // moment, then the loop drops out. They're the same drone, so the switch hides inside it.
-        let handoffTimer = null;
-        document.addEventListener('visibilitychange', async () => {
-            if (!playing || !engine) return;
-            clearTimeout(handoffTimer);
+        // On phones the recorded loop is the steady sound, playing out loud like music, so locking
+        // the screen or switching apps doesn't stop it. The live engine only takes over while you
+        // adjust something (so changes are instant); a couple of seconds after you stop, the
+        // re-recorded loop crossfades back in and the live engine rests.
+        let liveAudible = true;
+        let loopFresh = false;      // the loop matches the current settings
+        let suspendTimer = null;
+
+        async function goLive() {
+            if (!engine || liveAudible) return;
+            liveAudible = true;
+            clearTimeout(suspendTimer);
+            await engine.ctx.resume();
             const gain = engine.master.gain;
-            if (document.hidden) {
-                if (!loopReady) return;
-                loopAudio.muted = false;
-                gain.cancelScheduledValues(engine.ctx.currentTime);
-                gain.setTargetAtTime(0, engine.ctx.currentTime, 0.15);
-            } else {
-                await engine.ctx.resume();
-                const t = engine.ctx.currentTime;
-                gain.cancelScheduledValues(t);
-                gain.setValueAtTime(0, t);
-                gain.linearRampToValueAtTime(volumeLevel(), t + 0.8);
-                handoffTimer = setTimeout(() => { loopAudio.muted = true; }, 650);
-            }
+            const t = engine.ctx.currentTime;
+            gain.cancelScheduledValues(t);
+            gain.setTargetAtTime(volumeLevel(), t, 0.03);
+            loopAudio.muted = true;
+            scheduleMingle();
+            debug('live');
+        }
+
+        function goLoop() {
+            liveAudible = false;
+            loopAudio.muted = false;
+            const gain = engine.master.gain;
+            const t = engine.ctx.currentTime;
+            gain.cancelScheduledValues(t);
+            gain.setTargetAtTime(0, t, 0.25);
+            // Once it has faded, let the live engine rest to save battery
+            clearTimeout(suspendTimer);
+            suspendTimer = setTimeout(() => { if (!liveAudible) engine.ctx.suspend(); }, 2000);
+            debug('loop');
+        }
+
+        // Locked mid-adjustment: fall back to the last loop rather than silence
+        document.addEventListener('visibilitychange', () => {
+            debug('visibility ' + document.visibilityState);
+            if (PHONE && playing && engine && document.hidden && liveAudible && loopReady) goLoop();
         });
 
         async function togglePlay() {
@@ -1088,34 +1140,43 @@
 
             playing = !playing;
             const ctx = engine.ctx;
-            const t = ctx.currentTime;
             if (playing) {
+                const loopOnly = PHONE && loopReady && loopFresh;
+                liveAudible = !loopOnly;
                 applyAll(engine, true);
-                if (PHONE && !loopReady) {
-                    loopAudio.muted = true;
-                    loopAudio.src = silentWav();
-                    loopAudio.play().catch(() => {});
-                }
-                if (document.hidden && loopReady) {
-                    // Started from the lock screen
+                if (loopOnly) {
+                    // Nothing changed since the last recording: just play it (works from the lock screen too)
                     loopAudio.muted = false;
-                    loopAudio.play().catch(() => {});
+                    loopAudio.play().catch(e => debug('resume failed: ' + e.name));
+                    debug('play loop');
                 } else {
+                    if (PHONE) {
+                        // Start this audio element on the tap itself, out loud (silence, but not muted),
+                        // so the phone lets it play the recorded loop later without another tap
+                        loopAudio.muted = false;
+                        loopAudio.src = silentWav();
+                        loopAudio.play().catch(e => debug('unlock failed: ' + e.name));
+                        loopReady = false;
+                        refreshLoop(300);
+                    }
+                    liveAudible = true;
                     await ctx.resume();
                     engine.master.gain.cancelScheduledValues(ctx.currentTime);
                     engine.master.gain.setTargetAtTime(volumeLevel(), ctx.currentTime, 0.6);
-                    if (loopReady) loopAudio.play().catch(() => {});
+                    scheduleMingle();
+                    debug('play live');
                 }
-                refreshLoop(loopReady ? 0 : 300);
-                scheduleMingle();
             } else {
+                const t = ctx.currentTime;
                 engine.master.gain.cancelScheduledValues(t);
                 engine.master.gain.setTargetAtTime(0, t, 0.35);
                 releaseWanderers(engine);
                 loopAudio.pause();
                 clearTimeout(loopTimer);
                 clearTimeout(mingleTimer);
+                clearTimeout(suspendTimer);
                 setTimeout(() => { if (!playing) ctx.suspend(); }, 2500);
+                debug('pause');
             }
             updateMediaSession();
             renderPlayer();
@@ -1125,6 +1186,8 @@
 
         function changed(keepPreset) {
             if (!keepPreset) settings.preset = null;
+            loopFresh = false;
+            if (PHONE && playing) goLive();
             saveSettings();
             applyAll(engine, false);
             refreshLoop(2500);
@@ -1286,6 +1349,10 @@
         buildStatic();
         render();
         renderPlayer();
+        if (DEBUG) {
+            try { showDebug(JSON.parse(localStorage.getItem('droneDebug') || '[]')); } catch (e) {}
+            debug(`opened (phone mode ${PHONE}, audioSession ${'audioSession' in navigator}, standalone ${navigator.standalone === true})`);
+        }
     </script>
 </body>
 </html>
