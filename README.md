@@ -1,6 +1,6 @@
 # Drone
 
-A shruti-box style drone to practice against. Pick a key, mix in whichever voices you want, and play along.
+A shruti-box style drone. Pick a key, mix in whichever voices you want, and play along.
 
 **Use it:** https://mgilvryallen.github.io/drone/
 
