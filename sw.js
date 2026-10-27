@@ -1,6 +1,6 @@
 // Offline support: serve the app from cache, refresh the cache in the background.
 // Bump CACHE when files are added or removed.
-const CACHE = 'drone-v6';
+const CACHE = 'drone-v7';
 const FILES = [
     './',
     'index.html',

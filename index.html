@@ -264,9 +264,27 @@
         }
 
         .preset-grid {
+            position: relative; /* chips measure their offsetTop from here */
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 6px;
+        }
+
+        /* Past eight presets the grid scrolls, with a peek of the next row so it reads as more */
+        .preset-grid.scroll {
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            padding-bottom: 2px;
+            border-bottom: 1px dotted var(--light-tan);
+        }
+
+        .preset-tools {
+            margin-top: 10px;
+            text-align: right;
+        }
+
+        .preset-tools .link-btn + .link-btn {
+            margin-left: 14px;
         }
 
         .preset-grid .chip {
@@ -438,6 +456,81 @@
             cursor: pointer;
         }
 
+        /* ---- Sync ---- */
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            background: var(--heading);
+            color: var(--parchment);
+            border: 1px solid var(--heading);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background: var(--green);
+            border-color: var(--green);
+        }
+
+        .btn:last-child {
+            margin-bottom: 0;
+        }
+
+        .note,
+        .sync-status {
+            color: var(--muted);
+            font-size: 15px;
+            margin-bottom: 14px;
+        }
+
+        .sync-status.problem {
+            color: var(--rust);
+        }
+
+        #syncSetup {
+            margin-top: 14px;
+        }
+
+        .sync-steps {
+            color: var(--muted);
+            font-size: 15px;
+            margin: 0 0 16px 22px;
+        }
+
+        .sync-steps li {
+            margin-bottom: 6px;
+        }
+
+        #syncToken {
+            width: 100%;
+            padding: 10px 12px;
+            min-height: 44px;
+            margin-bottom: 12px;
+            border: 1px solid var(--light-tan);
+            border-radius: 0;
+            background: var(--parchment);
+            color: var(--ink);
+            font-family: inherit;
+            font-size: 16px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        #syncToken:focus {
+            outline: none;
+            border-color: var(--green);
+        }
+
+        .sync-links .link-btn {
+            display: block;
+            margin-top: 8px;
+            padding: 0;
+        }
+
         .credit {
             text-align: center;
             margin-top: 24px;
@@ -460,8 +553,11 @@
         </div>
 
         <div class="card" style="--accent: var(--plum)">
-            <h2>Presets</h2>
+            <div class="card-head"><h2>Presets</h2><button class="link-btn" onclick="savePreset()">save as preset</button></div>
             <div class="preset-grid" id="presetGrid"></div>
+            <div class="preset-tools" id="presetTools" hidden>
+                <button class="link-btn" onclick="renamePreset()">rename</button><button class="link-btn" onclick="deletePreset()">delete</button>
+            </div>
         </div>
 
         <div class="card" style="--accent: var(--rust)">
@@ -513,6 +609,32 @@
             </div>
         </div>
 
+        <div class="card" style="--accent: var(--teal)">
+            <h2>Sync</h2>
+            <p class="note" id="syncNote"></p>
+            <p class="sync-status" id="syncStatus" hidden></p>
+            <div id="syncOff">
+                <button class="btn" id="useGasBtn" onclick="useGasSync()" hidden></button>
+                <button class="btn" onclick="toggleSyncSetup()">Sync Across Devices</button>
+                <div id="syncSetup" hidden>
+                    <ol class="sync-steps">
+                        <li>Already syncing Gas? In Gas, tap <b>copy token for another device</b> and paste it below. The same token works for both.</li>
+                        <li>If not: no GitHub account? <a href="https://github.com/signup" target="_blank">Make one</a>. Then <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=Drone%20and%20Gas%20sync" target="_blank">make a token</a>. It's already filled in: set <b>Expiration</b> to <b>No expiration</b>, then tap <b>Generate token</b> at the bottom.</li>
+                        <li>Copy the token (it starts with <code>ghp_</code>) and paste it here. Do the same on each device.</li>
+                    </ol>
+                    <input type="password" id="syncToken" placeholder="ghp_…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="GitHub token">
+                    <button class="btn" id="connectBtn" onclick="connectSync()">Turn On Sync</button>
+                </div>
+            </div>
+            <div id="syncOn" hidden>
+                <button class="btn" onclick="syncNow(true)">Sync Now</button>
+                <div class="sync-links">
+                    <button class="link-btn" onclick="copyToken()">copy token for another device</button>
+                    <button class="link-btn" onclick="disconnectSync()">turn off sync on this device</button>
+                </div>
+            </div>
+        </div>
+
         <div class="credit">
             Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a><br><a href="https://github.com/mgilvryallen/drone" target="_blank">make your own copy</a>
         </div>
@@ -520,6 +642,12 @@
 
     <script>
         const SETTINGS_KEY = 'droneBrotherSettings';
+        const MY_PRESETS_KEY = 'droneMyPresets';
+        const DELETED_KEY = 'droneDeletedPresets';
+        const SYNC_KEY = 'droneSync';
+        // Gas lives on the same site, so in a browser tab its sync settings are right here to borrow.
+        // (Home-screen apps on iPhone each get their own storage, so there it's copy and paste.)
+        const GAS_SYNC_KEY = 'gasSync';
         const KEYS = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
         const OCTAVES = [['Low', 2], ['Middle', 3], ['High', 4]];
 
@@ -541,12 +669,14 @@
         ];
 
         // Presets set everything but volume. voices lists what's on; levels only notes changes from
-        // each voice's usual level. cents: A = 432 is −31.77, A = 444 is +15.67.
+        // each voice's usual level. cents: A = 432 is −31.77, A = 444 is +15.67. To make a preset
+        // quieter, lower all its levels together: blendFactor() only turns a stack down, never up,
+        // so a stack only gets quieter once its levels add up to less than 190.
         const PRESETS = [
             { name: 'Front Porch', note: 'D, wandering', key: 2, octave: 3, cents: 0,
                 voices: ['low', 'root', 'fifth', 'high', 'ninth', 'tenth'], mingle: 50, tone: 45, breath: 50 },
             { name: 'Cross A', note: 'AEAE tunes', key: 9, octave: 3, cents: 0,
-                voices: ['root', 'fifth', 'high', 'ninth'], levels: { root: 70, ninth: 15 }, mingle: 20, tone: 58, breath: 35 },
+                voices: ['low', 'root', 'fifth', 'high', 'ninth'], levels: { low: 30, root: 70, ninth: 15 }, mingle: 20, tone: 48, breath: 35 },
             { name: 'Sawmill', note: 'modal G tunes', key: 7, octave: 3, cents: 0,
                 voices: ['root', 'fifth', 'seventh', 'high', 'tenth'], levels: { seventh: 15, tenth: 20 }, mingle: 30, tone: 36, breath: 35 },
             { name: 'Pipe Drones', note: 'D octaves, Irish', key: 2, octave: 3, cents: 0,
@@ -554,9 +684,9 @@
             { name: 'Modal E', note: 'E minor & Dorian', key: 4, octave: 3, cents: 0,
                 voices: ['low', 'root', 'fifth', 'seventh', 'high', 'ninth'], levels: { low: 60, seventh: 20, ninth: 15 }, mingle: 25, tone: 32, breath: 40 },
             { name: 'Om', note: '136.1 Hz, A=432', key: 1, octave: 3, cents: 1200 * Math.log2(432 / 440),
-                voices: ['low', 'root', 'fifth', 'high', 'ninth'], levels: { high: 35, ninth: 15 }, mingle: 0, tone: 18, breath: 70 },
+                voices: ['low', 'root', 'fifth', 'high', 'ninth'], levels: { high: 35, ninth: 15 }, mingle: 8, tone: 26, breath: 70 },
             { name: 'Singing Bowl', note: 'high and soft', key: 7, octave: 4, cents: 0,
-                voices: ['low', 'root', 'fifth', 'high', 'ninth'], levels: { low: 50, high: 35, ninth: 18 }, mingle: 12, tone: 30, breath: 40 },
+                voices: ['low', 'root', 'fifth', 'high', 'ninth'], levels: { low: 25, root: 50, fifth: 40, high: 18, ninth: 9 }, mingle: 12, tone: 22, breath: 50 },
             { name: 'Deep Rest', note: 'slow, dark beats', key: 9, octave: 2, cents: 1200 * Math.log2(432 / 440),
                 voices: ['low', 'root', 'fourth', 'fifth', 'high', 'ninth'], levels: { low: 85, fourth: 10, high: 18, ninth: 14 }, mingle: 20, tone: 0, breath: 95 }
         ];
@@ -572,9 +702,35 @@
             mingle: 0, tone: 45, breath: 40, volume: 70
         };
 
+        function load(key, fallback) {
+            try {
+                const value = localStorage.getItem(key);
+                return value === null ? fallback : JSON.parse(value);
+            } catch (e) {
+                return fallback;
+            }
+        }
+
+        // Saved presets are your own: { id, name, key, octave, cents, mingle, tone, breath,
+        // voices (what's on), levels (all of them), updated }. Built-in presets are picked by
+        // index, saved ones by id.
+        let myPresets = load(MY_PRESETS_KEY, []);
+        let deleted = load(DELETED_KEY, {});
+
+        function presetValues(preset) {
+            return {
+                key: preset.key, octave: preset.octave, cents: preset.cents,
+                mingle: preset.mingle, tone: preset.tone, breath: preset.breath,
+                voices: Object.fromEntries(VOICES.map(v => [v.id, preset.voices.includes(v.id)])),
+                levels: { ...DEFAULTS.levels, ...(preset.levels || {}) }
+            };
+        }
+
         function loadSettings() {
             try {
-                const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+                const stored = localStorage.getItem(SETTINGS_KEY);
+                // First open starts on Front Porch
+                const saved = stored === null ? { ...presetValues(PRESETS[0]), preset: 0 } : JSON.parse(stored);
                 return {
                     ...DEFAULTS, ...saved,
                     voices: { ...DEFAULTS.voices, ...(saved.voices || {}) },
@@ -600,10 +756,16 @@
             if (key) {
                 const names = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
                 const index = names[key.replace('♯', '#').replace('♭', 'b')];
-                if (index !== undefined) settings.key = index;
+                if (index !== undefined && index !== settings.key) {
+                    settings.key = index;
+                    settings.preset = null;
+                }
             }
             const octave = parseInt(params.get('oct'));
-            if (octave >= 2 && octave <= 4) settings.octave = octave;
+            if (octave >= 2 && octave <= 4 && octave !== settings.octave) {
+                settings.octave = octave;
+                settings.preset = null;
+            }
         })();
 
         function rootFrequency() {
@@ -1060,16 +1222,92 @@
             changed();
         }
 
+        // index is a built-in preset's place in PRESETS, or a saved preset's id
         function applyPreset(index) {
-            const preset = PRESETS[index];
-            Object.assign(settings, {
-                key: preset.key, octave: preset.octave, cents: preset.cents,
-                mingle: preset.mingle, tone: preset.tone, breath: preset.breath, preset: index,
-                voices: Object.fromEntries(VOICES.map(v => [v.id, preset.voices.includes(v.id)])),
-                levels: { ...DEFAULTS.levels, ...(preset.levels || {}) }
-            });
+            const preset = typeof index === 'number' ? PRESETS[index] : myPresets.find(p => p.id === index);
+            if (!preset) return;
+            Object.assign(settings, presetValues(preset), { preset: index });
             if (engine && !settings.mingle) releaseWanderers(engine);
             scheduleMingle();
+            changed(true);
+        }
+
+        // ---- Saved presets ----
+
+        function newId() {
+            return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        }
+
+        function isSafeId(id) {
+            return typeof id === 'string' && /^[\w-]{1,40}$/.test(id);
+        }
+
+        function escapeHTML(text) {
+            return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+        }
+
+        function savePresets(fromSync) {
+            try {
+                localStorage.setItem(MY_PRESETS_KEY, JSON.stringify(myPresets));
+                localStorage.setItem(DELETED_KEY, JSON.stringify(deleted));
+            } catch (e) {}
+            if (!fromSync) scheduleSync();
+        }
+
+        function selectedMyPreset() {
+            return myPresets.find(p => p.id === settings.preset);
+        }
+
+        function askName(message, suggestion) {
+            const name = prompt(message, suggestion);
+            return name === null ? null : name.trim().slice(0, 40);
+        }
+
+        function savePreset() {
+            const octaveName = OCTAVES.find(([, octave]) => octave === settings.octave)[0].toLowerCase();
+            const name = askName('Name this preset:', `${KEYS[settings.key]} ${octaveName}`);
+            if (!name) return;
+            let preset = myPresets.find(p => p.name.toLowerCase() === name.toLowerCase());
+            if (preset && !confirm(`Replace your "${preset.name}" with these settings?`)) return;
+            if (!preset) {
+                preset = { id: newId() };
+                myPresets.push(preset);
+            }
+            Object.assign(preset, {
+                name, key: settings.key, octave: settings.octave, cents: settings.cents,
+                mingle: settings.mingle, tone: settings.tone, breath: settings.breath,
+                voices: VOICES.filter(v => settings.voices[v.id]).map(v => v.id),
+                levels: { ...settings.levels }, updated: Date.now()
+            });
+            settings.preset = preset.id;
+            savePresets();
+            buildPresetGrid();
+            changed(true);
+            const chip = document.getElementById(`preset-btn-${preset.id}`);
+            const grid = document.getElementById('presetGrid');
+            grid.scrollTop = chip.offsetTop - grid.clientHeight / 2;
+        }
+
+        function renamePreset() {
+            const preset = selectedMyPreset();
+            if (!preset) return;
+            const name = askName('Rename this preset:', preset.name);
+            if (!name || name === preset.name) return;
+            preset.name = name;
+            preset.updated = Date.now();
+            savePresets();
+            buildPresetGrid();
+            render();
+        }
+
+        function deletePreset() {
+            const preset = selectedMyPreset();
+            if (!preset || !confirm(`Delete "${preset.name}"? Your settings stay as they are.`)) return;
+            myPresets = myPresets.filter(p => p !== preset);
+            deleted[preset.id] = Date.now();
+            settings.preset = null;
+            savePresets();
+            buildPresetGrid();
             changed(true);
         }
 
@@ -1100,11 +1338,30 @@
             document.getElementById('playBtn').setAttribute('aria-label', playing ? 'Pause drone' : 'Play drone');
         }
 
+        // Rebuilt only when the saved presets change
+        function buildPresetGrid() {
+            const grid = document.getElementById('presetGrid');
+            const octaveName = octave => OCTAVES.find(([, o]) => o === octave)[0].toLowerCase();
+            grid.innerHTML = PRESETS.map((preset, i) =>
+                `<button class="chip small" id="preset-btn-${i}" onclick="applyPreset(${i})">${preset.name}<span class="ratio">${preset.note}</span></button>`
+            ).concat(myPresets.map(preset =>
+                `<button class="chip small" id="preset-btn-${preset.id}" onclick="applyPreset('${preset.id}')">${escapeHTML(preset.name)}<span class="ratio">yours · ${KEYS[preset.key]}, ${octaveName(preset.octave)}</span></button>`
+            )).join('');
+            sizePresetGrid();
+        }
+
+        function sizePresetGrid() {
+            const grid = document.getElementById('presetGrid');
+            const chips = grid.children;
+            const scroll = chips.length > 8;
+            grid.classList.toggle('scroll', scroll);
+            grid.style.maxHeight = '';
+            if (scroll) grid.style.maxHeight = `${chips[7].offsetTop + chips[7].offsetHeight + 24}px`;
+        }
+
         // Built once, so dragging a slider isn't interrupted by a re-render
         function buildStatic() {
-            document.getElementById('presetGrid').innerHTML = PRESETS.map((preset, i) =>
-                `<button class="chip small" id="preset-btn-${i}" onclick="applyPreset(${i})">${preset.name}<span class="ratio">${preset.note}</span></button>`
-            ).join('');
+            buildPresetGrid();
 
             document.getElementById('voices').innerHTML = VOICES.map(voice => `
                 <div class="voice-row" id="row-${voice.id}" style="--accent: ${voice.color}">
@@ -1138,7 +1395,9 @@
                 document.getElementById(`level-${voice.id}`).value = settings.levels[voice.id];
             });
 
-            PRESETS.forEach((preset, i) => document.getElementById(`preset-btn-${i}`).classList.toggle('selected', settings.preset === i));
+            [...PRESETS.map((preset, i) => i), ...myPresets.map(p => p.id)].forEach(id =>
+                document.getElementById(`preset-btn-${id}`).classList.toggle('selected', settings.preset === id));
+            document.getElementById('presetTools').hidden = !selectedMyPreset();
 
             PITCH_REFS.forEach(ref => {
                 const on = Math.abs(ref.cents - settings.cents) < 0.01;
@@ -1163,6 +1422,219 @@
             document.getElementById('volume').value = settings.volume;
         }
 
+        // ---- Sync ----
+        // Optional, the same way Gas does it: saved presets go in a private ("secret") gist on the
+        // user's own GitHub account, reached with a token that can only touch gists (one token
+        // can serve both apps). Each device keeps its own copy and merges with the gist: newest
+        // change wins per preset, deletions are remembered.
+
+        const SYNC_FILE = 'drone-presets.json';
+        let syncTimer = null;
+        let syncing = false;
+        let syncError = '';
+
+        function syncConfig() {
+            return load(SYNC_KEY, null);
+        }
+
+        function setSyncConfig(config) {
+            try {
+                if (config) localStorage.setItem(SYNC_KEY, JSON.stringify(config));
+                else localStorage.removeItem(SYNC_KEY);
+            } catch (e) {}
+        }
+
+        async function github(path, token, options = {}) {
+            const response = await fetch('https://api.github.com' + path, {
+                ...options,
+                headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }
+            });
+            if (response.status === 401) throw new Error("GitHub didn't accept that token. It may have expired or been deleted.");
+            if (response.status === 403 || response.status === 404) throw new Error('That token can\'t reach gists. Make a new one with the "gist" box ticked.');
+            if (!response.ok) throw new Error(`GitHub said ${response.status}.`);
+            return response.json();
+        }
+
+        // Only well-formed presets get in, whatever is in the gist
+        function cleanPresets(list) {
+            if (!Array.isArray(list)) return [];
+            const number = (value, min, max, fallback) => Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+            return list.filter(p => p && isSafeId(p.id) && typeof p.name === 'string' && p.name.trim() && Array.isArray(p.voices)).map(p => ({
+                id: p.id,
+                name: p.name.trim().slice(0, 40),
+                key: Math.round(number(p.key, 0, 11, DEFAULTS.key)),
+                octave: Math.round(number(p.octave, 2, 4, DEFAULTS.octave)),
+                cents: number(p.cents, -50, 50, 0),
+                mingle: number(p.mingle, 0, 100, 0),
+                tone: number(p.tone, 0, 100, DEFAULTS.tone),
+                breath: number(p.breath, 0, 100, DEFAULTS.breath),
+                voices: VOICES.map(v => v.id).filter(id => p.voices.includes(id)),
+                levels: Object.fromEntries(VOICES.map(v => [v.id, number(p.levels && p.levels[v.id], 0, 100, v.level)])),
+                updated: Number(p.updated) || 0
+            }));
+        }
+
+        function syncPayload() {
+            return JSON.stringify({ app: 'drone', version: 1, synced: new Date().toISOString(), presets: myPresets, deleted }, null, 1);
+        }
+
+        // The same presets always give the same string, whatever order they were written in
+        function canonical(presets, gone) {
+            const sorted = cleanPresets(presets).sort((a, b) => a.id.localeCompare(b.id));
+            return JSON.stringify([sorted, Object.keys(gone).sort().map(id => [id, gone[id]])]);
+        }
+
+        function mergeRemote(remoteData) {
+            const remoteDeleted = remoteData && typeof remoteData.deleted === 'object' ? remoteData.deleted : {};
+            Object.entries(remoteDeleted).forEach(([id, time]) => {
+                if (isSafeId(id) && Number(time) > (deleted[id] || 0)) deleted[id] = Number(time);
+            });
+            const byId = new Map();
+            [...cleanPresets(remoteData && remoteData.presets), ...myPresets].forEach(p => {
+                const existing = byId.get(p.id);
+                if (!existing || (p.updated || 0) >= (existing.updated || 0)) byId.set(p.id, p);
+            });
+            myPresets = [...byId.values()].filter(p => !(deleted[p.id] >= (p.updated || 0)));
+            myPresets.sort((a, b) => a.id.localeCompare(b.id));
+            if (typeof settings.preset === 'string' && !selectedMyPreset()) settings.preset = null;
+        }
+
+        function scheduleSync() {
+            if (!syncConfig()) return;
+            clearTimeout(syncTimer);
+            syncTimer = setTimeout(() => syncNow(false), 1500);
+        }
+
+        async function syncNow(fromButton) {
+            const config = syncConfig();
+            if (!config || syncing) return;
+            syncing = true;
+            if (fromButton) {
+                const status = document.getElementById('syncStatus');
+                status.textContent = 'Syncing…';
+                status.classList.remove('problem');
+            }
+            try {
+                const gist = await github(`/gists/${config.gistId}`, config.token);
+                const file = gist.files[SYNC_FILE];
+                let content = file ? file.content : '{}';
+                if (file && file.truncated) content = await (await fetch(file.raw_url)).text();
+                const remoteData = JSON.parse(content || '{}');
+                const before = canonical(myPresets, deleted);
+                mergeRemote(remoteData);
+                const after = canonical(myPresets, deleted);
+                if (after !== before) {
+                    savePresets(true);
+                    saveSettings();
+                    buildPresetGrid();
+                    render();
+                }
+                // Write back only if the gist is missing something, so its history doesn't fill up with copies
+                const remoteGone = remoteData && typeof remoteData.deleted === 'object' ? remoteData.deleted : {};
+                if (!file || canonical(remoteData && remoteData.presets, remoteGone) !== after) {
+                    await github(`/gists/${config.gistId}`, config.token, { method: 'PATCH', body: JSON.stringify({ files: { [SYNC_FILE]: { content: syncPayload() } } }) });
+                }
+                setSyncConfig({ ...config, lastSync: Date.now() });
+                syncError = '';
+            } catch (err) {
+                syncError = err.message || 'Could not reach GitHub.';
+            }
+            syncing = false;
+            renderSync();
+        }
+
+        async function connectSync(givenToken) {
+            const token = (givenToken || document.getElementById('syncToken').value).trim();
+            if (!token) {
+                alert('Paste your GitHub token first.');
+                return;
+            }
+            document.getElementById('connectBtn').textContent = 'Connecting…';
+            try {
+                const user = await github('/user', token);
+                // Use the existing sync file if another device already made one
+                const gists = await github('/gists?per_page=100', token);
+                let gist = gists.find(g => g.files && g.files[SYNC_FILE]);
+                if (!gist) {
+                    gist = await github('/gists', token, {
+                        method: 'POST',
+                        body: JSON.stringify({ description: 'Drone presets sync (private, made by the Drone app)', public: false, files: { [SYNC_FILE]: { content: syncPayload() } } })
+                    });
+                }
+                setSyncConfig({ token, gistId: gist.id, login: user.login, lastSync: null });
+                document.getElementById('syncToken').value = '';
+                await syncNow(false);
+            } catch (err) {
+                alert(err.message || 'Could not reach GitHub.');
+            }
+            document.getElementById('connectBtn').textContent = 'Turn On Sync';
+            renderSync();
+        }
+
+        function gasSync() {
+            const config = load(GAS_SYNC_KEY, null);
+            return config && typeof config.token === 'string' ? config : null;
+        }
+
+        function useGasSync() {
+            const config = gasSync();
+            if (config) connectSync(config.token);
+        }
+
+        function disconnectSync() {
+            if (!confirm('Turn off sync on this device? Your presets stay here, and the copy on GitHub stays too.')) return;
+            setSyncConfig(null);
+            renderSync();
+        }
+
+        async function copyToken() {
+            const config = syncConfig();
+            try {
+                await navigator.clipboard.writeText(config.token);
+                alert('Token copied. Paste it into Drone (or Gas) on your other device.');
+            } catch (err) {
+                prompt('Copy this token:', config.token);
+            }
+        }
+
+        function toggleSyncSetup() {
+            const setup = document.getElementById('syncSetup');
+            setup.hidden = !setup.hidden;
+            if (!setup.hidden) document.getElementById('syncToken').focus();
+        }
+
+        function renderSync() {
+            const config = syncConfig();
+            const gas = !config && gasSync();
+            document.getElementById('syncOff').hidden = Boolean(config);
+            document.getElementById('syncOn').hidden = !config;
+            const useGas = document.getElementById('useGasBtn');
+            useGas.hidden = !gas;
+            if (gas) useGas.textContent = gas.login ? `Use Gas's Sync (${gas.login})` : "Use Gas's Sync";
+            document.getElementById('syncNote').textContent = config
+                ? 'Your saved presets are on this device and in a private file on your GitHub, synced whenever you open the app or save one.'
+                : 'Your saved presets live only on this device. Turn on sync to have them on your phone and computer too. Gas users can use the same token.';
+
+            const status = document.getElementById('syncStatus');
+            status.hidden = !config;
+            if (!config) return;
+            if (syncError) {
+                status.textContent = `Sync problem: ${syncError}`;
+            } else if (!config.lastSync) {
+                status.textContent = `Connected as ${config.login}.`;
+            } else {
+                const minutes = Math.floor((Date.now() - config.lastSync) / 60000);
+                const when = minutes < 1 ? 'just now' : minutes < 60 ? `${minutes} min ago` : new Date(config.lastSync).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                status.textContent = `Synced with ${config.login}'s GitHub ${when}.`;
+            }
+            status.classList.toggle('problem', Boolean(syncError));
+        }
+
+        // Pick up presets saved on other devices whenever the app comes back to the front
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') syncNow(false);
+        });
+
         // Skipped on localhost so local edits show up right away
         if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
             navigator.serviceWorker.register('sw.js');
@@ -1171,6 +1643,11 @@
         buildStatic();
         render();
         renderPlayer();
+        renderSync();
+        syncNow(false);
+        // The fonts change the chips' height, so measure the scrolling grid again once they're in
+        if (document.fonts) document.fonts.ready.then(sizePresetGrid);
+        window.addEventListener('resize', sizePresetGrid);
     </script>
 </body>
 </html>
