@@ -17,7 +17,7 @@ A shruti-box style drone to practice against. Pick a key, mix in whichever voice
 - **iPhone:** open the link in Safari, tap Share, then **Add to Home Screen**.
 - **Android:** open it in Chrome, tap the menu, then **Install app**.
 
-Lock your phone and it keeps playing: the app records 90 seconds of the current drone in the background and loops it while the screen is off.
+The screen stays on while it plays. Switch apps or lock your phone and the drone stops, on purpose: put the phone down and listen.
 
 ## Make your own copy
 

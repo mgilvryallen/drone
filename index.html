@@ -428,14 +428,6 @@
             cursor: pointer;
         }
 
-        .note {
-            color: var(--muted);
-            font-size: 14px;
-            text-align: center;
-            margin-top: -6px;
-            margin-bottom: 20px;
-        }
-
         .credit {
             text-align: center;
             margin-top: 24px;
@@ -510,8 +502,6 @@
                 <input type="range" id="volume" min="0" max="100" oninput="setSetting('volume', Number(this.value))" aria-label="Volume">
             </div>
         </div>
-
-        <p class="note" id="lockNote">Lock your screen and the drone keeps playing.</p>
 
         <div class="credit">
             Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a> · <a href="https://github.com/mgilvryallen/drone" target="_blank">make your own copy</a>
@@ -621,7 +611,6 @@
         // reed-like waveform, panned apart so they beat and shimmer against each other. They run
         // through a soft saturator (a little buzz), a tone filter, and two nasal resonances. Slow
         // drifting LFOs move the volume and brightness like a bellows; a little filtered noise adds air.
-        // The same engine runs live, and offline to render the loop that plays while the screen is locked.
 
         const REED_DETUNES = [[-3.5, 0, 4.2], [-3.3, 0.3, 3.4], [-2.6, 0.4, 3.1], [-3.2, 0.2, 3.5], [-4.1, -0.3, 2.7], [-2.9, 0.5, 4], [-3.4, 0.1, 3.9], [-3, 0.6, 3.8], [-3.6, -0.2, 3.3], [-2.7, 0.3, 3.6]];
         const WANDER_DETUNES = [[-3.1, 0.2, 3.7]];
@@ -813,7 +802,7 @@
             // Air rides with Tone: the brighter it gets, the more breath you hear in the reeds
             eng.airGain.gain.setTargetAtTime(0.003 + (settings.tone / 100) * 0.008, t, 0.2);
 
-            if (eng === engine && playing && liveAudible && !document.hidden) eng.master.gain.setTargetAtTime(volumeLevel(), t, 0.08);
+            if (eng === engine && playing && !document.hidden) eng.master.gain.setTargetAtTime(volumeLevel(), t, 0.08);
         }
 
         function volumeLevel() {
@@ -929,7 +918,7 @@
             if (!playing || !settings.mingle) return;
             mingleTimer = setTimeout(() => {
                 let next = mingleGap(Math.random);
-                if (playing && engine && !document.hidden && liveAudible) {
+                if (playing && engine && !document.hidden) {
                     const now = engine.ctx.currentTime;
                     const end = wander(engine, now + 0.05, Math.random);
                     if (end) next += end - now;
@@ -938,198 +927,12 @@
             }, (wait === undefined ? mingleGap(Math.random) : wait) * 1000);
         }
 
-        // ---- Screen-off playback ----
-        // Phones pause live web audio when the screen locks, but they keep playing an ordinary audio
-        // file, like a music app. So on phones, 90 seconds of the current drone (Mingle included) is
-        // rendered into a seamless loop, and that loop is what you hear (see goLoop / goLive below).
-        // An earlier version kept the loop playing muted and unmuted it on lock; iOS stops muted
-        // audio in the background and won't unmute it without a tap, so that never worked.
+        // ---- Play ----
+        // Live only, on purpose: switching apps or locking the phone stops the drone. (A version
+        // that kept playing with the screen off was tried and taken out; Gordon likes it as a
+        // reset.) The screen is kept awake while it plays so auto-lock doesn't cut it off.
 
-        const PHONE = matchMedia('(pointer: coarse)').matches;
-        const LOOP_SECONDS = 90;
-        const LOOP_FADE = 4;
-        // ?debug in the URL reports each step of the screen-off handoff to the server's log
-        const DEBUG = location.search.includes('debug');
-        function debug(message) {
-            if (!DEBUG) return;
-            const line = `${new Date().toLocaleTimeString()} ${message} | hidden=${document.hidden} ctx=${engine ? engine.ctx.state : '-'} loop=${loopAudio.paused ? 'paused' : 'playing'}${loopAudio.muted ? ' muted' : ''} ready=${loopReady}`;
-            new Image().src = `log?${encodeURIComponent(line)}&r=${Math.random()}`;
-            try {
-                const lines = JSON.parse(localStorage.getItem('droneDebug') || '[]').concat(line).slice(-60);
-                localStorage.setItem('droneDebug', JSON.stringify(lines));
-                showDebug(lines);
-            } catch (e) {}
-        }
-
-        function showDebug(lines) {
-            let box = document.getElementById('debugLog');
-            if (!box) {
-                box = document.createElement('pre');
-                box.id = 'debugLog';
-                box.style.cssText = 'white-space: pre-wrap; font-size: 11px; background: #fff; border: 1px solid #c9bda5; padding: 8px; margin: 16px auto; max-width: 440px; max-height: 50vh; overflow: auto;';
-                box.ondblclick = () => { localStorage.removeItem('droneDebug'); box.textContent = ''; };
-                document.body.appendChild(box);
-            }
-            box.textContent = lines.join('\n');
-        }
-
-        const loopAudio = new Audio();
-        if (DEBUG) ['play', 'playing', 'pause', 'ended', 'error', 'stalled', 'suspend', 'volumechange'].forEach(type => loopAudio.addEventListener(type, () => debug('audio ' + type + (loopAudio.error ? ' code ' + loopAudio.error.code : ''))));
-        loopAudio.loop = true;
-        loopAudio.setAttribute('playsinline', '');
-        let loopUrl = null;
-        let loopReady = false;
-        let loopTimer = null;
-        let loopVersion = 0;
-
-        async function renderLoop() {
-            const rate = 32000;
-            const context = new OfflineAudioContext(2, rate * (LOOP_SECONDS + LOOP_FADE), rate);
-            const eng = createEngine(context);
-            applyAll(eng, true);
-            eng.master.gain.value = volumeLevel();
-            if (settings.mingle) {
-                const rand = seededRandom(1 + Math.floor(Math.random() * 100000));
-                // Kept clear of the loop's seam (the first and last few seconds)
-                for (let t = 5 + rand() * 15; t < LOOP_SECONDS - 14; t = (wander(eng, t, rand) || t) + mingleGap(rand));
-            }
-            const buffer = await context.startRendering();
-            return encodeWav(buffer);
-        }
-
-        // Fold the extra seconds at the end back over the start, so the loop point can't be heard
-        function encodeWav(buffer) {
-            const length = buffer.sampleRate * LOOP_SECONDS;
-            const fadeLength = buffer.sampleRate * LOOP_FADE;
-            const channels = [buffer.getChannelData(0), buffer.getChannelData(1)];
-            const out = new DataView(new ArrayBuffer(44 + length * 4));
-            const text = (offset, s) => [...s].forEach((ch, i) => out.setUint8(offset + i, ch.charCodeAt(0)));
-            text(0, 'RIFF');
-            out.setUint32(4, 36 + length * 4, true);
-            text(8, 'WAVEfmt ');
-            out.setUint32(16, 16, true);
-            out.setUint16(20, 1, true);
-            out.setUint16(22, 2, true);
-            out.setUint32(24, buffer.sampleRate, true);
-            out.setUint32(28, buffer.sampleRate * 4, true);
-            out.setUint16(32, 4, true);
-            out.setUint16(34, 16, true);
-            text(36, 'data');
-            out.setUint32(40, length * 4, true);
-            for (let i = 0; i < length; i++) {
-                for (let ch = 0; ch < 2; ch++) {
-                    let sample = channels[ch][i];
-                    if (i < fadeLength) {
-                        const x = i / fadeLength;
-                        sample = sample * Math.sin(x * Math.PI / 2) + channels[ch][length + i] * Math.cos(x * Math.PI / 2);
-                    }
-                    out.setInt16(44 + i * 4 + ch * 2, Math.max(-1, Math.min(1, sample)) * 32767, true);
-                }
-            }
-            return new Blob([out], { type: 'audio/wav' });
-        }
-
-        // A tiny silent file, played on the tap that starts the drone, so the phone lets this
-        // audio element play later without another tap
-        function silentWav() {
-            const out = new DataView(new ArrayBuffer(44 + 16000));
-            const text = (offset, s) => [...s].forEach((ch, i) => out.setUint8(offset + i, ch.charCodeAt(0)));
-            text(0, 'RIFF');
-            out.setUint32(4, 36 + 16000, true);
-            text(8, 'WAVEfmt ');
-            out.setUint32(16, 16, true);
-            out.setUint16(20, 1, true);
-            out.setUint16(22, 1, true);
-            out.setUint32(24, 8000, true);
-            out.setUint32(28, 16000, true);
-            out.setUint16(32, 2, true);
-            out.setUint16(34, 16, true);
-            text(36, 'data');
-            out.setUint32(40, 16000, true);
-            return URL.createObjectURL(new Blob([out], { type: 'audio/wav' }));
-        }
-
-        function refreshLoop(delay) {
-            if (!PHONE || !playing) return;
-            clearTimeout(loopTimer);
-            // Any change after this makes the recording stale, even one made while it renders
-            const version = ++loopVersion;
-            loopTimer = setTimeout(async () => {
-                try {
-                    debug('render start');
-                    const blob = await renderLoop();
-                    debug('render done ' + blob.size);
-                    if (version !== loopVersion || !playing) return;
-                    const oldUrl = loopUrl;
-                    loopUrl = URL.createObjectURL(blob);
-                    loopAudio.src = loopUrl;
-                    loopAudio.muted = false;
-                    await loopAudio.play();
-                    loopReady = true;
-                    loopFresh = true;
-                    goLoop();
-                    if (oldUrl) URL.revokeObjectURL(oldUrl);
-                } catch (e) {
-                    debug('loop failed: ' + e.name + ' ' + e.message);
-                }
-            }, delay);
-        }
-
-        function updateMediaSession() {
-            if (!('mediaSession' in navigator)) return;
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: `${KEYS[settings.key]} drone`,
-                artist: 'Drone',
-                artwork: [{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }]
-            });
-            navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
-        }
-
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.setActionHandler('play', () => { if (!playing) togglePlay(); });
-            navigator.mediaSession.setActionHandler('pause', () => { if (playing) togglePlay(); });
-        }
-
-        // On phones the recorded loop is the steady sound, playing out loud like music, so locking
-        // the screen or switching apps doesn't stop it. The live engine only takes over while you
-        // adjust something (so changes are instant); a couple of seconds after you stop, the
-        // re-recorded loop crossfades back in and the live engine rests.
-        let liveAudible = true;
-        let loopFresh = false;      // the loop matches the current settings
-        let suspendTimer = null;
-
-        async function goLive() {
-            if (!engine || liveAudible) return;
-            liveAudible = true;
-            clearTimeout(suspendTimer);
-            await engine.ctx.resume();
-            const gain = engine.master.gain;
-            const t = engine.ctx.currentTime;
-            gain.cancelScheduledValues(t);
-            gain.setTargetAtTime(volumeLevel(), t, 0.03);
-            loopAudio.muted = true;
-            scheduleMingle();
-            debug('live');
-        }
-
-        function goLoop() {
-            liveAudible = false;
-            loopAudio.muted = false;
-            const gain = engine.master.gain;
-            const t = engine.ctx.currentTime;
-            gain.cancelScheduledValues(t);
-            gain.setTargetAtTime(0, t, 0.25);
-            // Once it has faded, let the live engine rest to save battery
-            clearTimeout(suspendTimer);
-            suspendTimer = setTimeout(() => { if (!liveAudible) engine.ctx.suspend(); }, 2000);
-            debug('loop');
-        }
-
-        // Locked mid-adjustment: fall back to the last loop rather than silence
-        document.addEventListener('visibilitychange', () => {
-            debug('visibility ' + document.visibilityState);
-            if (PHONE && playing && engine && document.hidden && liveAudible && loopReady) goLoop();
-        });
+        let wakeLock = null;
 
         async function togglePlay() {
             if (!engine) engine = createEngine(new (window.AudioContext || window.webkitAudioContext)());
@@ -1141,62 +944,51 @@
             playing = !playing;
             const ctx = engine.ctx;
             if (playing) {
-                const loopOnly = PHONE && loopReady && loopFresh;
-                liveAudible = !loopOnly;
                 applyAll(engine, true);
-                if (loopOnly) {
-                    // Nothing changed since the last recording: just play it (works from the lock screen too)
-                    loopAudio.muted = false;
-                    loopAudio.play().catch(e => debug('resume failed: ' + e.name));
-                    debug('play loop');
-                } else {
-                    if (PHONE) {
-                        // Start this audio element on the tap itself, out loud (silence, but not muted),
-                        // so the phone lets it play the recorded loop later without another tap
-                        loopAudio.muted = false;
-                        loopAudio.src = silentWav();
-                        loopAudio.play().catch(e => debug('unlock failed: ' + e.name));
-                        loopReady = false;
-                        refreshLoop(300);
-                    }
-                    liveAudible = true;
-                    await ctx.resume();
-                    engine.master.gain.cancelScheduledValues(ctx.currentTime);
-                    engine.master.gain.setTargetAtTime(volumeLevel(), ctx.currentTime, 0.6);
-                    scheduleMingle();
-                    debug('play live');
-                }
+                await ctx.resume();
+                engine.master.gain.cancelScheduledValues(ctx.currentTime);
+                engine.master.gain.setTargetAtTime(volumeLevel(), ctx.currentTime, 0.6);
+                scheduleMingle();
+                requestWakeLock();
             } else {
                 const t = ctx.currentTime;
                 engine.master.gain.cancelScheduledValues(t);
                 engine.master.gain.setTargetAtTime(0, t, 0.35);
                 releaseWanderers(engine);
-                loopAudio.pause();
-                clearTimeout(loopTimer);
                 clearTimeout(mingleTimer);
-                clearTimeout(suspendTimer);
+                releaseWakeLock();
                 setTimeout(() => { if (!playing) ctx.suspend(); }, 2500);
-                debug('pause');
             }
-            updateMediaSession();
             renderPlayer();
         }
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+            } catch (e) {}
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock) wakeLock.release();
+            wakeLock = null;
+        }
+
+        // Wake locks drop when the app is hidden; take it back on return
+        document.addEventListener('visibilitychange', () => {
+            if (playing && document.visibilityState === 'visible') requestWakeLock();
+        });
 
         // ---- Controls ----
 
         function changed(keepPreset) {
             if (!keepPreset) settings.preset = null;
-            loopFresh = false;
-            if (PHONE && playing) goLive();
             saveSettings();
             applyAll(engine, false);
-            refreshLoop(2500);
             render();
         }
 
         function setSetting(name, value) {
             settings[name] = value;
-            if (name === 'key') updateMediaSession();
             changed();
         }
 
@@ -1248,7 +1040,6 @@
             });
             if (engine && !settings.mingle) releaseWanderers(engine);
             scheduleMingle();
-            updateMediaSession();
             changed(true);
         }
 
@@ -1299,7 +1090,6 @@
                 `<button class="chip" id="preset-${ref.hz}" onclick="setCents(${ref.cents})">${ref.hz}</button>`
             ).join('');
 
-            if (!PHONE) document.getElementById('lockNote').hidden = true;
         }
 
         function render() {
@@ -1349,10 +1139,6 @@
         buildStatic();
         render();
         renderPlayer();
-        if (DEBUG) {
-            try { showDebug(JSON.parse(localStorage.getItem('droneDebug') || '[]')); } catch (e) {}
-            debug(`opened (phone mode ${PHONE}, audioSession ${'audioSession' in navigator}, standalone ${navigator.standalone === true})`);
-        }
     </script>
 </body>
 </html>
