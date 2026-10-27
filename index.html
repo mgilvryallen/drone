@@ -531,6 +531,29 @@
             padding: 0;
         }
 
+        /* Back to Tunes, when Drone was opened from there: a real button, like Tunes' own */
+        .back-bar {
+            margin-bottom: -6px;
+        }
+
+        .back-btn {
+            padding: 8px 16px 8px 12px;
+            min-height: 40px;
+            background: var(--paper);
+            border: 1.5px solid var(--heading);
+            border-radius: 999px;
+            color: var(--heading);
+            font-family: 'Rug Pull', Georgia, serif;
+            font-size: 16px;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+        }
+
+        .back-btn:hover {
+            background: var(--heading);
+            color: var(--parchment);
+        }
+
         .credit {
             text-align: center;
             margin-top: 24px;
@@ -541,6 +564,9 @@
 </head>
 <body>
     <div class="container">
+        <div class="back-bar" id="backBar" hidden>
+            <button class="back-btn" onclick="backToTunes()">‹ Tunes</button>
+        </div>
         <header>
             <img src="icons/icon.svg" alt="">
             <h1>Drone</h1>
@@ -749,9 +775,10 @@
 
         const settings = loadSettings();
 
-        // #key=A&oct=3 (from Tunes) picks the key on open
+        // #key=A&oct=3 (from Tunes) picks the key on open; &from=tunes adds a way back
         (function readHash() {
             const params = new URLSearchParams(location.hash.slice(1));
+            document.getElementById('backBar').hidden = params.get('from') !== 'tunes';
             const key = params.get('key');
             if (key) {
                 const names = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
@@ -767,6 +794,13 @@
                 settings.preset = null;
             }
         })();
+
+        // Going back keeps Tunes as it was (the tune page you came from), where the browser can;
+        // otherwise open Tunes fresh
+        function backToTunes() {
+            if (history.length > 1 && document.referrer.includes('/tunes/')) history.back();
+            else location.href = '../tunes/';
+        }
 
         function rootFrequency() {
             const midi = 12 * (settings.octave + 1) + settings.key;
@@ -1097,9 +1131,11 @@
         }
 
         // Seconds of plain drone between wanderings: random (sometimes soon, sometimes a long
-        // while), averaging about 70s at the low end of the slider and 25s at the top
+        // while), averaging about 70s at the low end of the slider, 49s in the middle, and 18s at
+        // the top (the last stretch of the slider speeds up a little more)
         function mingleGap(rand) {
-            const mean = 75 - 50 * (settings.mingle / 100);
+            const m = settings.mingle / 100;
+            const mean = 75 - 50 * m - 7 * Math.pow(m, 4);
             return Math.max(6, -mean * Math.log(1 - rand() * 0.98));
         }
 
