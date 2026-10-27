@@ -1087,7 +1087,7 @@
 
         function volumeLevel() {
             // The loudness the stack loses going easier into the buzz comes back here, after it, where it adds no grit
-            return Math.pow(settings.volume / 100, 1.6) * 0.6 / stackDrive();
+            return Math.pow(settings.volume / 100, 1.6) * 0.5 / stackDrive();
         }
 
         // ---- Mingle ----
@@ -1101,12 +1101,13 @@
         // fades in on the first and, if the last is a voice that's playing, settles into it and
         // fades out there; a path ending where it began is a lean away and back. needs: voices
         // that must be on; unless: voices that hand the move over to a bigger one. hang: a stop on
-        // the way to linger on. level: how loud the stray gets next to the voices; the common
-        // leans are kept faint, a shadow rather than a second voice.
+        // the way to linger on. sparse: only when no more than this many voices are on. level: how
+        // loud the stray gets next to the voices; the common leans are kept faint, a shadow
+        // rather than a second voice.
         const MINGLE_MOVES = [
             { path: [2, 15 / 8, 2], needs: ['high'], weight: 1, level: 0.32 },             // octave leans down to the major 7th
-            { path: [3 / 2, 45 / 32, 3 / 2], needs: ['fifth'], weight: 0.8, level: 0.3 },   // 5th sinks to the tritone
-            { path: [4 / 3, 45 / 32, 4 / 3], needs: ['fourth'], weight: 0.8, level: 0.3 },  // 4th rises to the tritone
+            { path: [3 / 2, 45 / 32, 3 / 2], needs: ['fifth'], sparse: 3, weight: 0.5, level: 0.15 },   // 5th sinks to the tritone (only when little else is on)
+            { path: [4 / 3, 45 / 32, 4 / 3], needs: ['fourth'], sparse: 3, weight: 0.5, level: 0.15 },  // 4th rises to the tritone (likewise)
             { path: [5 / 2, 8 / 3, 5 / 2], needs: ['tenth'], weight: 0.12, level: 0.45 },   // 10th lifts to the 11th
             { path: [1, 15 / 16, 1], needs: ['root'], weight: 0.08, level: 0.4 },           // root dips a half step
             { path: [1, 9 / 8, 1], needs: ['root'], weight: 0.08, level: 0.4 },             // root climbs a whole step
@@ -1116,7 +1117,7 @@
             { path: [3 / 2, 4 / 3], needs: ['fourth', 'fifth'], unless: ['sixth'], weight: 0.2, level: 0.4 },   // 5th down to the 4th
             { path: [4 / 3, 27 / 16], needs: ['fourth', 'sixth'], unless: ['fifth'], weight: 0.5, level: 0.4 }, // 4th up to the 6th
             { path: [27 / 16, 4 / 3], needs: ['fourth', 'sixth'], unless: ['fifth'], weight: 0.2, level: 0.4 }, // 6th down to the 4th
-            { path: [4 / 3, 27 / 16, 3 / 2], needs: ['fourth', 'fifth', 'sixth'], weight: 0.5, level: 0.4 },   // 4th up to the 6th, settling on the 5th
+            { path: [4 / 3, 27 / 16, 3 / 2], needs: ['fourth'], weight: 0.5, level: 0.4 },                     // 4th up to the 6th, settling on the 5th (6th and 5th needn't be on)
             { path: [27 / 16, 4 / 3, 3 / 2], needs: ['fourth', 'fifth', 'sixth'], weight: 0.3, level: 0.4 },   // 6th down to the 4th, up to the 5th
             { path: [9 / 4, 15 / 8, 2], needs: ['ninth', 'high'], weight: 0.4, level: 0.35 },                  // 9th down through the 7th to the octave
             { path: [2, 15 / 8, 9 / 4, 2], hang: 2, needs: ['ninth', 'high'], weight: 0.25, level: 0.35 },      // octave down to the 7th, up to the 9th, lingers, home
@@ -1143,7 +1144,8 @@
         function wander(eng, t0, rand) {
             if (settings.mingle <= 0 || eng.wanderers.some(w => w.busyUntil > t0)) return null;
             const isOn = id => levelOf(VOICES.find(v => v.id === id)) > 0;
-            const moves = MINGLE_MOVES.filter(move => move.needs.every(isOn) && !(move.unless || []).some(isOn));
+            const count = activeVoiceCount();
+            const moves = MINGLE_MOVES.filter(move => move.needs.every(isOn) && !(move.unless || []).some(isOn) && !(move.sparse && count > move.sparse));
             if (!moves.length) return null;
             let pick = rand() * moves.reduce((sum, move) => sum + move.weight, 0);
             const move = moves.find(m => (pick -= m.weight) <= 0) || moves[0];
@@ -1249,11 +1251,11 @@
             const air = eng.airGain.gain;
             air.cancelScheduledValues(t);
             air.setValueAtTime(0, t);
-            air.linearRampToValueAtTime(0.07, t + 0.25);
-            air.setTargetAtTime((0.003 + (settings.tone / 100) * 0.008) * stackDrive(), t + 0.3, 1.3);
+            air.linearRampToValueAtTime(0.03, t + 0.2);
+            air.setTargetAtTime((0.003 + (settings.tone / 100) * 0.008) * stackDrive(), t + 0.25, 0.7);
             eng.air.frequency.cancelScheduledValues(t);
             eng.air.frequency.setValueAtTime(700, t);
-            eng.air.frequency.setTargetAtTime(1800, t + 0.3, 1.6);
+            eng.air.frequency.setTargetAtTime(1800, t + 0.25, 1.0);
         }
 
         async function togglePlay() {
@@ -1283,12 +1285,12 @@
                 const g = engine.master.gain;
                 g.cancelScheduledValues(t);
                 g.setTargetAtTime(0, t, 0.4);
-                g.setTargetAtTime(0, t + 0.9, 1.7);
+                g.setTargetAtTime(0, t + 0.9, 1.2);
                 engine.tone.frequency.setTargetAtTime(toneCutoff() * 0.35, t, 2.2);
                 releaseWanderers(engine);
                 clearTimeout(mingleTimer);
                 releaseWakeLock();
-                suspendTimer = setTimeout(() => { if (!playing) ctx.suspend(); }, 11000);
+                suspendTimer = setTimeout(() => { if (!playing) ctx.suspend(); }, 8000);
             }
             renderPlayer();
         }
