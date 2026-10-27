@@ -704,17 +704,17 @@
             { name: 'Cross A', note: 'AEAE tunes', key: 9, octave: 3, cents: 0,
                 voices: ['low', 'root', 'fifth', 'high', 'ninth', 'tenth'], levels: { low: 30, root: 70, ninth: 15, tenth: 32 }, mingle: 20, tone: 38, breath: 35 },
             { name: 'Sawmill', note: 'modal G tunes', key: 7, octave: 3, cents: 0,
-                voices: ['root', 'fifth', 'seventh', 'high', 'tenth'], levels: { seventh: 15, tenth: 20 }, mingle: 30, tone: 36, breath: 35 },
+                voices: ['root', 'fifth', 'seventh', 'high', 'ninth', 'tenth'], levels: { seventh: 15, ninth: 15, tenth: 20 }, mingle: 30, tone: 30, breath: 35 },
             { name: 'Pipe Drones', note: 'D octaves, Irish', key: 2, octave: 3, cents: 0,
                 voices: ['low', 'root', 'high'], levels: { high: 55 }, mingle: 0, tone: 60, breath: 25 },
             { name: 'Modal E', note: 'E minor & Dorian', key: 4, octave: 3, cents: 0,
-                voices: ['low', 'root', 'fifth', 'seventh', 'high', 'ninth'], levels: { low: 60, seventh: 20, ninth: 15 }, mingle: 25, tone: 32, breath: 40 },
+                voices: ['low', 'root', 'fifth', 'seventh', 'high', 'ninth'], levels: { low: 45, seventh: 20, ninth: 15 }, mingle: 25, tone: 32, breath: 40 },
             { name: 'Om', note: '136.1 Hz, A=432', key: 1, octave: 3, cents: 1200 * Math.log2(432 / 440),
-                voices: ['low', 'root', 'fifth', 'high', 'ninth'], levels: { high: 35, ninth: 15 }, mingle: 8, tone: 26, breath: 70 },
+                voices: ['low', 'root', 'fourth', 'fifth', 'high', 'ninth'], levels: { fourth: 12, high: 35, ninth: 15 }, mingle: 8, tone: 34, breath: 70 },
             { name: 'Singing Bowl', note: 'high and soft', key: 7, octave: 4, cents: 0,
-                voices: ['root', 'fourth', 'fifth', 'high', 'ninth', 'tenth'], levels: { root: 41, fourth: 5, fifth: 33, high: 22, ninth: 13, tenth: 20 }, mingle: 5, tone: 22, breath: 50 },
+                voices: ['root', 'fourth', 'fifth', 'high', 'ninth', 'tenth'], levels: { root: 41, fourth: 5, fifth: 33, high: 28, ninth: 18, tenth: 26 }, mingle: 5, tone: 22, breath: 50 },
             { name: 'Deep Rest', note: 'slow, dark beats', key: 9, octave: 2, cents: 1200 * Math.log2(432 / 440),
-                voices: ['low', 'root', 'fourth', 'fifth', 'high', 'ninth'], levels: { low: 85, fourth: 10, high: 18, ninth: 14 }, mingle: 20, tone: 0, breath: 95 }
+                voices: ['low', 'root', 'fourth', 'fifth', 'high', 'ninth', 'tenth'], levels: { low: 85, fourth: 10, high: 18, ninth: 14, tenth: 15 }, mingle: 20, tone: 0, breath: 95 }
         ];
 
         // Common concert-pitch references, as cents away from A = 440. The slider pulls toward these.
