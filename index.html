@@ -952,16 +952,30 @@
             bloomDrift.connect(driftHz).connect(nasal1.frequency);
             [bloomTone, bloomRing, bloomDrift].forEach(lfo => lfo.start(now));
 
-            const eng = { ctx: context, wave: reedWave(context), buzz, mix, master, tone, nasal2, ampDepth, filterDepth, filterDepthB, bloomToneDepth, air, airGain, voices: {}, lastRoot: null, last: {} };
+            // Undertow: slower and slighter still, felt more than heard. Over three to five
+            // minutes the whole sound leans a little louder and pushes a little harder into the
+            // buzz, then eases back. It waits a minute after play, then comes in over another
+            // minute and a half (see stirUndertow).
+            const undertowA = context.createOscillator();
+            undertowA.frequency.value = 1 / 200;
+            const undertowB = context.createOscillator();
+            undertowB.frequency.value = 1 / 290;
+            const undertowVolume = context.createGain();
+            undertowVolume.gain.value = 0;
+            const undertowDrive = context.createGain();
+            undertowDrive.gain.value = 0;
+            undertowA.connect(undertowVolume).connect(bellows.gain);
+            undertowB.connect(undertowDrive).connect(mix.gain);
+            [undertowA, undertowB].forEach(lfo => lfo.start(now));
+
+            const eng = { ctx: context, wave: reedWave(context), buzz, mix, master, tone, nasal2, ampDepth, filterDepth, filterDepthB, bloomToneDepth, undertowVolume, undertowDrive, air, airGain, voices: {}, lastRoot: null, last: {} };
             // A spare reed bank for Mingle's wandering notes
             eng.wanderers = WANDER_DETUNES.map(detunes => makeReeds(eng, detunes));
             return eng;
         }
 
-        // Three reeds, plus a quieter fourth tuned two-thirds as far from the middle one as the
-        // upper reed is, so it beats half again as slowly and half again as softly underneath
-        // -> level gain -> swell (each voice blooms and sinks over a minute or more, at its own
-        // rate) -> duck gain (Mingle dips a voice a touch while it's wandering) -> buzz
+        // Three reeds -> level gain -> swell (each voice blooms and sinks over a minute or more, at
+        // its own rate) -> duck gain (Mingle dips a voice a touch while it's wandering) -> buzz
         function makeReeds(eng, detunes, seed) {
             const c = eng.ctx;
             const gain = c.createGain();
@@ -976,20 +990,35 @@
             bloom.start(c.currentTime);
             const duck = c.createGain();
             gain.connect(swell).connect(duck).connect(eng.mix);
-            const allDetunes = [...detunes, detunes[2] * 2 / 3];
-            const oscillators = allDetunes.map((detune, r) => {
+            const oscillators = detunes.map((detune, r) => {
                 const osc = c.createOscillator();
                 osc.setPeriodicWave(eng.wave);
                 osc.detune.value = detune;
                 const reedGain = c.createGain();
-                reedGain.gain.value = r === 3 ? 0.11 * 2 / 3 : 0.11;
+                reedGain.gain.value = 0.11;
                 const pan = c.createStereoPanner();
-                pan.pan.value = [-0.45, 0, 0.45, 0.2][r];
+                pan.pan.value = [-0.45, 0, 0.45][r];
                 osc.connect(reedGain).connect(pan).connect(gain);
                 osc.start(c.currentTime);
                 return osc;
             });
-            return { gain, duck, oscillators, detunes: allDetunes, busyUntil: -1, sourceId: null };
+            return { gain, duck, oscillators, detunes, busyUntil: -1, sourceId: null };
+        }
+
+        function stirUndertow(eng, t) {
+            [[eng.undertowVolume, 0.055], [eng.undertowDrive, 0.05]].forEach(([depth, amount]) => {
+                depth.gain.cancelScheduledValues(t);
+                depth.gain.setValueAtTime(0, t);
+                depth.gain.setValueAtTime(0, t + 60);
+                depth.gain.linearRampToValueAtTime(amount, t + 150);
+            });
+        }
+
+        function stillUndertow(eng, t) {
+            [eng.undertowVolume, eng.undertowDrive].forEach(depth => {
+                depth.gain.cancelScheduledValues(t);
+                depth.gain.setTargetAtTime(0, t, 1);
+            });
         }
 
         // Voices are only built once they're first turned on, to spare the phone's processor
@@ -1087,7 +1116,7 @@
 
         function volumeLevel() {
             // The loudness the stack loses going easier into the buzz comes back here, after it, where it adds no grit
-            return Math.pow(settings.volume / 100, 1.6) * 0.5 / stackDrive();
+            return Math.pow(settings.volume / 100, 1.6) * 0.535 / stackDrive();
         }
 
         // ---- Mingle ----
@@ -1276,6 +1305,7 @@
                 engine.master.gain.cancelScheduledValues(t);
                 engine.master.gain.setTargetAtTime(volumeLevel(), t, 0.6);
                 openingBreath(engine, t);
+                stirUndertow(engine, t);
                 scheduleMingle();
                 requestWakeLock();
             } else {
@@ -1288,6 +1318,7 @@
                 g.setTargetAtTime(0, t + 0.9, 1.2);
                 engine.tone.frequency.setTargetAtTime(toneCutoff() * 0.35, t, 2.2);
                 releaseWanderers(engine);
+                stillUndertow(engine, t);
                 clearTimeout(mingleTimer);
                 releaseWakeLock();
                 suspendTimer = setTimeout(() => { if (!playing) ctx.suspend(); }, 8000);
