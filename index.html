@@ -545,20 +545,20 @@
         const PRESETS = [
             { name: 'Front Porch', note: 'D, wandering', key: 2, octave: 3, cents: 0,
                 voices: ['low', 'root', 'fifth', 'high', 'ninth', 'tenth'], mingle: 50, tone: 45, breath: 50 },
-            { name: 'Cross A', note: 'AEAE tunes', key: 9, octave: 2, cents: 0,
+            { name: 'Cross A', note: 'AEAE tunes', key: 9, octave: 3, cents: 0,
                 voices: ['root', 'fifth', 'high', 'ninth'], levels: { root: 70, ninth: 15 }, mingle: 20, tone: 58, breath: 35 },
             { name: 'Sawmill', note: 'modal G tunes', key: 7, octave: 3, cents: 0,
-                voices: ['root', 'fifth', 'seventh', 'high', 'tenth'], levels: { seventh: 15, tenth: 20 }, mingle: 30, tone: 50, breath: 35 },
+                voices: ['root', 'fifth', 'seventh', 'high', 'tenth'], levels: { seventh: 15, tenth: 20 }, mingle: 30, tone: 36, breath: 35 },
             { name: 'Pipe Drones', note: 'D octaves, Irish', key: 2, octave: 3, cents: 0,
                 voices: ['low', 'root', 'high'], levels: { high: 55 }, mingle: 0, tone: 60, breath: 25 },
             { name: 'Modal E', note: 'E minor & Dorian', key: 4, octave: 3, cents: 0,
-                voices: ['low', 'root', 'fifth', 'seventh', 'high'], levels: { low: 60, seventh: 20 }, mingle: 25, tone: 42, breath: 40 },
+                voices: ['low', 'root', 'fifth', 'seventh', 'high', 'ninth'], levels: { low: 60, seventh: 20, ninth: 15 }, mingle: 25, tone: 32, breath: 40 },
             { name: 'Om', note: '136.1 Hz, A=432', key: 1, octave: 3, cents: 1200 * Math.log2(432 / 440),
-                voices: ['low', 'root', 'fifth'], mingle: 0, tone: 30, breath: 70 },
-            { name: 'Singing Bowl', note: 'high and ringing', key: 7, octave: 4, cents: 0,
-                voices: ['low', 'root', 'fifth', 'high', 'ninth'], levels: { low: 50, high: 55, ninth: 30 }, mingle: 40, tone: 62, breath: 80 },
+                voices: ['low', 'root', 'fifth', 'high', 'ninth'], levels: { high: 35, ninth: 15 }, mingle: 0, tone: 18, breath: 70 },
+            { name: 'Singing Bowl', note: 'high and soft', key: 7, octave: 4, cents: 0,
+                voices: ['low', 'root', 'fifth', 'high', 'ninth'], levels: { low: 50, high: 35, ninth: 18 }, mingle: 12, tone: 30, breath: 40 },
             { name: 'Deep Rest', note: 'slow, dark beats', key: 9, octave: 2, cents: 1200 * Math.log2(432 / 440),
-                voices: ['low', 'root', 'fourth', 'fifth', 'ninth'], levels: { low: 85, fourth: 10, ninth: 6 }, mingle: 20, tone: 0, breath: 95 }
+                voices: ['low', 'root', 'fourth', 'fifth', 'high', 'ninth'], levels: { low: 85, fourth: 10, high: 18, ninth: 14 }, mingle: 20, tone: 0, breath: 95 }
         ];
 
         // Common concert-pitch references, as cents away from A = 440. The slider pulls toward these.
@@ -697,6 +697,10 @@
             buzz.oversample = '2x';
             buzz.connect(tone);
 
+            // Everything feeds the buzz through here, so the drive can ease off as voices stack up
+            const mix = context.createGain();
+            mix.connect(buzz);
+
             // Bellows: two slow LFOs at unrelated rates, so the movement never quite repeats
             const lfoA = context.createOscillator();
             lfoA.frequency.value = 0.11;
@@ -727,7 +731,7 @@
             noise.connect(air).connect(airGain).connect(bellows);
             noise.start(now);
 
-            const eng = { ctx: context, wave: reedWave(context), buzz, master, tone, nasal2, ampDepth, filterDepth, filterDepthB, airGain, voices: {}, lastRoot: null };
+            const eng = { ctx: context, wave: reedWave(context), buzz, mix, master, tone, nasal2, ampDepth, filterDepth, filterDepthB, airGain, voices: {}, lastRoot: null };
             // A spare reed bank for Mingle's wandering notes
             eng.wanderers = WANDER_DETUNES.map(detunes => makeReeds(eng, detunes));
             return eng;
@@ -739,7 +743,7 @@
             const gain = c.createGain();
             gain.gain.value = 0;
             const duck = c.createGain();
-            gain.connect(duck).connect(eng.buzz);
+            gain.connect(duck).connect(eng.mix);
             const oscillators = detunes.map((detune, r) => {
                 const osc = c.createOscillator();
                 osc.setPeriodicWave(eng.wave);
@@ -772,10 +776,24 @@
         }
 
         // Tone: the top of the range opens up more gently than the bottom, so bright isn't harsh
+        // More voices means more overtones and more drive into the buzz, so a big stack turns harsh.
+        // Past two voices, each extra one eases the drive and darkens the tone a little.
+        function activeVoiceCount() {
+            return VOICES.filter(voice => levelOf(voice) > 0).length;
+        }
+
+        function stackDarkening() {
+            return Math.max(0.6, 1 - 0.07 * Math.max(0, activeVoiceCount() - 2));
+        }
+
+        function stackDrive() {
+            return 1 / (1 + 0.12 * Math.max(0, activeVoiceCount() - 2));
+        }
+
         function toneCutoff() {
             const t = settings.tone / 100;
             const octaves = t <= 0.45 ? t * 4.2 : 1.89 + (t - 0.45) * 2.3;
-            return 450 * Math.pow(2, octaves);
+            return 450 * Math.pow(2, octaves) * stackDarkening();
         }
 
         function applyAll(eng, immediate) {
@@ -797,6 +815,7 @@
             });
 
             const cutoff = toneCutoff();
+            eng.mix.gain.setTargetAtTime(stackDrive(), t, immediate ? 0.001 : 0.12);
             const breath = settings.breath / 100;
             eng.tone.frequency.setTargetAtTime(cutoff, t, 0.08);
             eng.nasal2.gain.setTargetAtTime(2.5 - Math.max(0, settings.tone - 45) / 55 * 3, t, 0.08);
@@ -810,13 +829,14 @@
             eng.filterDepth.gain.setTargetAtTime(breath * cutoff * 0.1, t, 0.2);
             eng.filterDepthB.gain.setTargetAtTime(breath * cutoff * 0.06, t, 0.2);
             // Air rides with Tone: the brighter it gets, the more breath you hear in the reeds
-            eng.airGain.gain.setTargetAtTime(0.003 + (settings.tone / 100) * 0.008, t, 0.2);
+            eng.airGain.gain.setTargetAtTime((0.003 + (settings.tone / 100) * 0.008) * stackDrive(), t, 0.2);
 
             if (eng === engine && playing && !document.hidden) eng.master.gain.setTargetAtTime(volumeLevel(), t, 0.08);
         }
 
         function volumeLevel() {
-            return Math.pow(settings.volume / 100, 1.6) * 0.9;
+            // Part of the loudness the stack loses at the buzz comes back here, after it, where it adds no grit
+            return Math.pow(settings.volume / 100, 1.6) * 0.9 * Math.sqrt(1 / stackDrive());
         }
 
         // ---- Mingle ----
