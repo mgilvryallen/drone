@@ -1,6 +1,6 @@
 // Offline support: the page from the network when it can, everything else from cache.
 // Bump CACHE when files are added or removed.
-const CACHE = 'drone-v8';
+const CACHE = 'drone-v9';
 const FILES = [
     './',
     'index.html',
@@ -14,7 +14,9 @@ const FILES = [
 ];
 
 self.addEventListener('install', event => {
-    event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)));
+    // Straight from the server, not the browser's short-term cache, so a new version never
+    // saves an old copy of a file (GitHub lets browsers keep files for ten minutes)
+    event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES.map(file => new Request(file, { cache: 'reload' })))));
     self.skipWaiting();
 });
 
