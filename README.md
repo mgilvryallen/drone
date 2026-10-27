@@ -8,10 +8,10 @@ A shruti-box style drone. Pick a key, mix in whichever voices you want, and play
 - **Presets** to start from: Front Porch, Cross A (for AEAE), Sawmill (modal G), Pipe Drones, Modal E, Om (136.1 Hz), Singing Bowl and Deep Rest. It opens on Front Porch the first time.
 - **Save your own presets:** tap **save as preset** and give it a name. Tap one of yours to **rename** or **delete** it.
 - **Ten voices**, each with its own level slider: low root, low 4th, root, 4th, 5th, 6th, ♭7th, octave, 9th and 10th. **reset** puts the voices and Mingle back the way the last preset you picked has them (and **reset** under Sound does the same for tone and breath).
-- **Mingle:** now and then, a voice strays, and finds its way back. Turn it up and the strays come more often and stand out more; down low they're rare and faint.
+- **Mingle:** now and then, a voice strays, and finds its way back, or glides from one voice that's on to another and settles there. Turn it up and the strays come more often and stand out more; down low they're rare and faint.
 - **Fine tune** up or down by single cents (±50). The slider catches on A = 432, 435, 440, 442, 443 and 444.
 - **Tone** runs from dark to bright (and airier). **Breath** runs from still to shimmering: the reeds beat against each other more.
-- Open it with a key already set: `mgilvryallen.github.io/drone/#key=A` (Tunes uses this).
+- The space bar plays and pauses on a keyboard. Open it with a key already set: `mgilvryallen.github.io/drone/#key=A` (Tunes uses this).
 
 ## Put it on your phone
 
