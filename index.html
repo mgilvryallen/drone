@@ -56,6 +56,16 @@
             box-sizing: border-box;
         }
 
+
+        /* Rebalance lines so text never ends on one lonely word, and headings break evenly */
+        p, label, li, .note, .suspect, .stovetop {
+            text-wrap: pretty;
+        }
+
+        h1, h2, h3 {
+            text-wrap: balance;
+        }
+
         body {
             font-family: 'Lumios Typewriter', Georgia, serif;
             font-size: 17px;
@@ -504,7 +514,7 @@
         </div>
 
         <div class="credit">
-            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a> · <a href="https://github.com/mgilvryallen/drone" target="_blank">make your own copy</a>
+            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a><br><a href="https://github.com/mgilvryallen/drone" target="_blank">make your own copy</a>
         </div>
     </div>
 
@@ -1095,9 +1105,11 @@
         function render() {
             const root = rootFrequency();
             const octaveName = OCTAVES.find(([, octave]) => octave === settings.octave)[0].toLowerCase();
-            const parts = VOICES.filter(v => settings.voices[v.id]).map(v => `${v.label.toLowerCase()} ${(root * ratioOf(v)).toFixed(1)}`);
+            // Non-breaking spaces keep each voice with its number (and "Hz" with the last one), so
+            // lines only break between voices
+            const parts = VOICES.filter(v => settings.voices[v.id]).map(v => `${v.label.toLowerCase()} ${(root * ratioOf(v)).toFixed(1)}`.replace(/ /g, '&nbsp;'));
             document.getElementById('readout').innerHTML =
-                `<strong>${KEYS[settings.key]}</strong> · ${octaveName}<br>${parts.join(' · ')} Hz`;
+                `<strong>${KEYS[settings.key]}</strong> · ${octaveName}<br>${parts.join(' · ')}&nbsp;Hz`;
 
             VOICES.forEach(voice => {
                 const on = settings.voices[voice.id];
