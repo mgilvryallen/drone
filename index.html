@@ -712,7 +712,7 @@
             { name: 'Om', note: '136.1 Hz, A=432', key: 1, octave: 3, cents: 1200 * Math.log2(432 / 440),
                 voices: ['low', 'root', 'fifth', 'high', 'ninth'], levels: { high: 35, ninth: 15 }, mingle: 8, tone: 26, breath: 70 },
             { name: 'Singing Bowl', note: 'high and soft', key: 7, octave: 4, cents: 0,
-                voices: ['root', 'fourth', 'fifth', 'high', 'ninth', 'tenth'], levels: { root: 41, fourth: 5, fifth: 33, high: 14, ninth: 13, tenth: 13 }, mingle: 5, tone: 22, breath: 50 },
+                voices: ['root', 'fourth', 'fifth', 'high', 'ninth', 'tenth'], levels: { root: 41, fourth: 5, fifth: 33, high: 22, ninth: 13, tenth: 20 }, mingle: 5, tone: 22, breath: 50 },
             { name: 'Deep Rest', note: 'slow, dark beats', key: 9, octave: 2, cents: 1200 * Math.log2(432 / 440),
                 voices: ['low', 'root', 'fourth', 'fifth', 'high', 'ninth'], levels: { low: 85, fourth: 10, high: 18, ninth: 14 }, mingle: 20, tone: 0, breath: 95 }
         ];
@@ -906,8 +906,11 @@
             const lfoB = context.createOscillator();
             lfoB.frequency.value = 0.067;
             const ampDepth = context.createGain();
+            ampDepth.gain.value = 0;
             const filterDepth = context.createGain();
+            filterDepth.gain.value = 0;
             const filterDepthB = context.createGain();
+            filterDepthB.gain.value = 0;
             lfoA.connect(ampDepth).connect(bellows.gain);
             lfoA.connect(filterDepth).connect(tone.frequency);
             lfoB.connect(filterDepthB).connect(tone.frequency);
@@ -927,6 +930,7 @@
             air.frequency.value = 1800;
             air.Q.value = 0.7;
             const airGain = context.createGain();
+            airGain.gain.value = 0;
             noise.connect(air).connect(airGain).connect(bellows);
             noise.start(now);
 
@@ -948,7 +952,7 @@
             bloomDrift.connect(driftHz).connect(nasal1.frequency);
             [bloomTone, bloomRing, bloomDrift].forEach(lfo => lfo.start(now));
 
-            const eng = { ctx: context, wave: reedWave(context), buzz, mix, master, tone, nasal2, ampDepth, filterDepth, filterDepthB, bloomToneDepth, airGain, voices: {}, lastRoot: null, last: {} };
+            const eng = { ctx: context, wave: reedWave(context), buzz, mix, master, tone, nasal2, ampDepth, filterDepth, filterDepthB, bloomToneDepth, air, airGain, voices: {}, lastRoot: null, last: {} };
             // A spare reed bank for Mingle's wandering notes
             eng.wanderers = WANDER_DETUNES.map(detunes => makeReeds(eng, detunes));
             return eng;
@@ -1088,22 +1092,41 @@
 
         // ---- Mingle ----
         // A spare reed bank fades in on top of an active voice at the same pitch (so you can't hear
-        // it arrive), takes a slow, gooey slide to a nearby dissonance, leans there briefly, slides
-        // home, and fades out. The voice it grew out of keeps playing, dipped just a little so the
+        // it arrive), takes slow, gooey slides along a path (out to a nearby dissonance and home,
+        // or from one voice that's on to another, where it settles and fades out). The voice it grew out of keeps playing, dipped just a little so the
         // total loudness stays about even. One at a time, at random, spaced-out moments. The slider
         // sets how loud the strays get as well as how often: half as loud at the bottom, full at the top.
 
-        // What each wandering grows out of, where it leans (as a ratio of the root), how often, and
-        // how loud the stray note gets next to its voice. The common ones are kept faint, a shadow
-        // rather than a second voice; the octave and tritone leans were too much at full strength.
+        // Each move is a path of pitches (ratios of the root) the stray note slides through. It
+        // fades in on the first and, if the last is a voice that's playing, settles into it and
+        // fades out there; a path ending where it began is a lean away and back. needs: voices
+        // that must be on; unless: voices that hand the move over to a bigger one. hang: a stop on
+        // the way to linger on. level: how loud the stray gets next to the voices; the common
+        // leans are kept faint, a shadow rather than a second voice.
         const MINGLE_MOVES = [
-            { from: 'high', to: 15 / 8, weight: 1, level: 0.32 },        // octave leans down to the major 7th
-            { from: 'fifth', to: 45 / 32, weight: 0.8, level: 0.3 },     // 5th sinks to the tritone
-            { from: 'fourth', to: 45 / 32, weight: 0.8, level: 0.3 },    // 4th rises to the tritone
-            { from: 'tenth', to: 8 / 3, weight: 0.12, level: 0.45 },     // 10th lifts to the 11th
-            { from: 'root', to: 15 / 16, weight: 0.08, level: 0.4 },     // root dips a half step
-            { from: 'root', to: 9 / 8, weight: 0.08, level: 0.4 }        // root climbs a whole step
+            { path: [2, 15 / 8, 2], needs: ['high'], weight: 1, level: 0.32 },             // octave leans down to the major 7th
+            { path: [3 / 2, 45 / 32, 3 / 2], needs: ['fifth'], weight: 0.8, level: 0.3 },   // 5th sinks to the tritone
+            { path: [4 / 3, 45 / 32, 4 / 3], needs: ['fourth'], weight: 0.8, level: 0.3 },  // 4th rises to the tritone
+            { path: [5 / 2, 8 / 3, 5 / 2], needs: ['tenth'], weight: 0.12, level: 0.45 },   // 10th lifts to the 11th
+            { path: [1, 15 / 16, 1], needs: ['root'], weight: 0.08, level: 0.4 },           // root dips a half step
+            { path: [1, 9 / 8, 1], needs: ['root'], weight: 0.08, level: 0.4 },             // root climbs a whole step
+
+            // Glides between voices that are on
+            { path: [4 / 3, 3 / 2], needs: ['fourth', 'fifth'], unless: ['sixth'], weight: 0.5, level: 0.4 },   // 4th up to the 5th
+            { path: [3 / 2, 4 / 3], needs: ['fourth', 'fifth'], unless: ['sixth'], weight: 0.2, level: 0.4 },   // 5th down to the 4th
+            { path: [4 / 3, 27 / 16], needs: ['fourth', 'sixth'], unless: ['fifth'], weight: 0.5, level: 0.4 }, // 4th up to the 6th
+            { path: [27 / 16, 4 / 3], needs: ['fourth', 'sixth'], unless: ['fifth'], weight: 0.2, level: 0.4 }, // 6th down to the 4th
+            { path: [4 / 3, 27 / 16, 3 / 2], needs: ['fourth', 'fifth', 'sixth'], weight: 0.5, level: 0.4 },   // 4th up to the 6th, settling on the 5th
+            { path: [27 / 16, 4 / 3, 3 / 2], needs: ['fourth', 'fifth', 'sixth'], weight: 0.3, level: 0.4 },   // 6th down to the 4th, up to the 5th
+            { path: [9 / 4, 15 / 8, 2], needs: ['ninth', 'high'], weight: 0.4, level: 0.35 },                  // 9th down through the 7th to the octave
+            { path: [2, 15 / 8, 9 / 4, 2], hang: 2, needs: ['ninth', 'high'], weight: 0.25, level: 0.35 },      // octave down to the 7th, up to the 9th, lingers, home
+            { path: [2, 5 / 2, 9 / 4], resolve: 'high', needs: ['ninth', 'tenth'], weight: 0.35, level: 0.35 }, // octave up to the 10th, down to the 9th (and home to the octave if it's on)
+            { path: [5 / 2, 2, 9 / 4], resolve: 'high', needs: ['ninth', 'tenth'], weight: 0.25, level: 0.35 }  // 10th down to the octave, up to the 9th (and home)
         ];
+
+        function voiceAt(ratio) {
+            return VOICES.find(v => Math.abs(ratioOf(v) - ratio) < 1e-6 && levelOf(v) > 0);
+        }
 
         // Frequency points for a slow-in, slow-out slide (even steps in pitch, not in Hz)
         function glideCurve(from, to) {
@@ -1119,35 +1142,38 @@
         // Returns when the wandering will be over, or null if nothing could wander
         function wander(eng, t0, rand) {
             if (settings.mingle <= 0 || eng.wanderers.some(w => w.busyUntil > t0)) return null;
-            const moves = MINGLE_MOVES.filter(move => levelOf(VOICES.find(v => v.id === move.from)) > 0);
+            const isOn = id => levelOf(VOICES.find(v => v.id === id)) > 0;
+            const moves = MINGLE_MOVES.filter(move => move.needs.every(isOn) && !(move.unless || []).some(isOn));
             if (!moves.length) return null;
             let pick = rand() * moves.reduce((sum, move) => sum + move.weight, 0);
             const move = moves.find(m => (pick -= m.weight) <= 0) || moves[0];
-            const source = VOICES.find(v => v.id === move.from);
+            const path = move.resolve && isOn(move.resolve) ? [...move.path, ratioOf(VOICES.find(v => v.id === move.resolve))] : move.path;
+            const source = voiceAt(path[0]) || VOICES.find(v => v.id === move.needs[0]);
             const wanderer = eng.wanderers[0];
-
             const root = rootFrequency();
-            const from = root * ratioOf(source);
-            const target = root * move.to;
+
+            // Slide from point to point, lingering briefly at each stop on the way
             const fadeIn = 1.6;
-            const slide = 1.6 + rand() * 1.0;
-            const hang = 0.4 + rand() * 1.0;
-            const slideBack = slide * 1.1;
+            let at = t0 + fadeIn * 0.85;
+            const steps = [];
+            for (let i = 1; i < path.length; i++) {
+                const slide = 1.6 + rand() * 1.0;
+                steps.push({ from: root * path[i - 1], to: root * path[i], at, slide });
+                at += slide;
+                if (i < path.length - 1) at += i === move.hang ? 2 + rand() * 1.5 : 0.4 + rand() * 1.0;
+            }
+            const home = at + 0.5;
             const fadeOut = 1.4;
-            const away = t0 + fadeIn * 0.85;
-            const back = away + slide + hang;
-            const home = back + slideBack;
             const end = home + fadeOut;
             const strength = move.level * (0.5 + 0.5 * settings.mingle / 100);
             const level = levelOf(source) * blendFactor() * strength;
-            // Dip the source voice only as much as the stray note adds, so loudness holds steady
+            // Dip the voice it grew from only as much as the stray note adds, so loudness holds steady
             const dip = 1 - strength * 0.23;
 
             wanderer.oscillators.forEach(osc => {
                 osc.frequency.cancelScheduledValues(t0);
-                osc.frequency.setValueAtTime(from, t0);
-                osc.frequency.setValueCurveAtTime(glideCurve(from, target), away, slide);
-                osc.frequency.setValueCurveAtTime(glideCurve(target, from), back, slideBack);
+                osc.frequency.setValueAtTime(root * path[0], t0);
+                steps.forEach(step => osc.frequency.setValueCurveAtTime(glideCurve(step.from, step.to), step.at, step.slide));
             });
             const g = wanderer.gain.gain;
             g.cancelScheduledValues(t0);
@@ -1215,6 +1241,21 @@
 
         let wakeLock = null;
 
+        let suspendTimer = null;
+
+        // A breath of air as the reeds start: a soft, dark hush that swells for a moment and fades
+        // over a few seconds, the bellows filling
+        function openingBreath(eng, t) {
+            const air = eng.airGain.gain;
+            air.cancelScheduledValues(t);
+            air.setValueAtTime(0, t);
+            air.linearRampToValueAtTime(0.07, t + 0.25);
+            air.setTargetAtTime((0.003 + (settings.tone / 100) * 0.008) * stackDrive(), t + 0.3, 1.3);
+            eng.air.frequency.cancelScheduledValues(t);
+            eng.air.frequency.setValueAtTime(700, t);
+            eng.air.frequency.setTargetAtTime(1800, t + 0.3, 1.6);
+        }
+
         async function togglePlay() {
             if (!engine) engine = createEngine(new (window.AudioContext || window.webkitAudioContext)());
             // Play through the iPhone silent switch, like a music app would
@@ -1225,20 +1266,29 @@
             playing = !playing;
             const ctx = engine.ctx;
             if (playing) {
-                applyAll(engine, true);
+                clearTimeout(suspendTimer);
                 await ctx.resume();
-                engine.master.gain.cancelScheduledValues(ctx.currentTime);
-                engine.master.gain.setTargetAtTime(volumeLevel(), ctx.currentTime, 0.6);
+                const t = ctx.currentTime;
+                engine.tone.frequency.cancelScheduledValues(t);
+                applyAll(engine, true);
+                engine.master.gain.cancelScheduledValues(t);
+                engine.master.gain.setTargetAtTime(volumeLevel(), t, 0.6);
+                openingBreath(engine, t);
                 scheduleMingle();
                 requestWakeLock();
             } else {
+                // The sound dies away like it's lingering in a room: quickly at first, then a long,
+                // soft tail, darkening as it goes, rather than a volume knob turned down
                 const t = ctx.currentTime;
-                engine.master.gain.cancelScheduledValues(t);
-                engine.master.gain.setTargetAtTime(0, t, 0.35);
+                const g = engine.master.gain;
+                g.cancelScheduledValues(t);
+                g.setTargetAtTime(0, t, 0.4);
+                g.setTargetAtTime(0, t + 0.9, 1.7);
+                engine.tone.frequency.setTargetAtTime(toneCutoff() * 0.35, t, 2.2);
                 releaseWanderers(engine);
                 clearTimeout(mingleTimer);
                 releaseWakeLock();
-                setTimeout(() => { if (!playing) ctx.suspend(); }, 2500);
+                suspendTimer = setTimeout(() => { if (!playing) ctx.suspend(); }, 11000);
             }
             renderPlayer();
         }
@@ -1253,6 +1303,15 @@
             if (wakeLock) wakeLock.release();
             wakeLock = null;
         }
+
+        // On a keyboard, the space bar plays and pauses (unless you're typing somewhere)
+        document.addEventListener('keydown', event => {
+            if (event.code !== 'Space' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+            const el = event.target;
+            if (el.isContentEditable || el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['range', 'checkbox', 'radio', 'button'].includes(el.type))) return;
+            event.preventDefault();
+            togglePlay();
+        });
 
         // Wake locks drop when the app is hidden; take it back on return
         document.addEventListener('visibilitychange', () => {
