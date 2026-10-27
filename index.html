@@ -712,7 +712,7 @@
             { name: 'Om', note: '136.1 Hz, A=432', key: 1, octave: 3, cents: 1200 * Math.log2(432 / 440),
                 voices: ['low', 'root', 'fifth', 'high', 'ninth'], levels: { high: 35, ninth: 15 }, mingle: 8, tone: 26, breath: 70 },
             { name: 'Singing Bowl', note: 'high and soft', key: 7, octave: 4, cents: 0,
-                voices: ['root', 'fifth', 'high', 'ninth', 'tenth'], levels: { root: 40, fifth: 32, high: 14, ninth: 12, tenth: 7 }, mingle: 0, tone: 22, breath: 50 },
+                voices: ['root', 'fourth', 'fifth', 'high', 'ninth', 'tenth'], levels: { root: 40, fourth: 5, fifth: 32, high: 14, ninth: 12, tenth: 12 }, mingle: 5, tone: 22, breath: 50 },
             { name: 'Deep Rest', note: 'slow, dark beats', key: 9, octave: 2, cents: 1200 * Math.log2(432 / 440),
                 voices: ['low', 'root', 'fourth', 'fifth', 'high', 'ninth'], levels: { low: 85, fourth: 10, high: 18, ninth: 14 }, mingle: 20, tone: 0, breath: 95 }
         ];
@@ -1034,7 +1034,7 @@
 
         function volumeLevel() {
             // Part of the loudness the stack loses at the buzz comes back here, after it, where it adds no grit
-            return Math.pow(settings.volume / 100, 1.6) * 0.9 * Math.sqrt(1 / stackDrive());
+            return Math.pow(settings.volume / 100, 1.6) * 0.8 * Math.sqrt(1 / stackDrive());
         }
 
         // ---- Mingle ----
