@@ -560,6 +560,81 @@
             color: var(--muted);
             font-size: 14px;
         }
+
+        /* ---- The app's own dialog box (in place of the browser's alert, confirm and prompt) ---- */
+
+        .dialog {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(44, 36, 22, 0.35);
+        }
+
+        .dialog-box {
+            width: 100%;
+            max-width: 360px;
+            background: var(--paper);
+            border: 1px solid var(--light-tan);
+            border-top: 4px solid var(--heading);
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(44, 36, 22, 0.25);
+        }
+
+        .dialog-box p {
+            color: var(--ink);
+            font-size: 16px;
+            line-height: 1.5;
+            white-space: pre-line;
+        }
+
+        .dialog-box input {
+            width: 100%;
+            margin-top: 14px;
+            padding: 10px 12px;
+            min-height: 44px;
+            border: 1px solid var(--light-tan);
+            border-radius: 0;
+            background: var(--parchment);
+            color: var(--ink);
+            font-family: inherit;
+            font-size: 16px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .dialog-box input:focus {
+            outline: none;
+            border-color: var(--green);
+        }
+
+        .dialog-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 18px;
+        }
+
+        .dialog-buttons button {
+            min-height: 42px;
+            padding: 8px 18px;
+            border: 1px solid var(--heading);
+            background: var(--heading);
+            color: var(--parchment);
+            font-family: 'Rug Pull', Georgia, serif;
+            font-size: 16px;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+        }
+
+        .dialog-buttons .dialog-cancel {
+            background: transparent;
+            color: var(--heading);
+            border-color: var(--light-tan);
+        }
     </style>
 </head>
 <body>
@@ -666,8 +741,67 @@
         </div>
     </div>
 
+    <div class="dialog" id="dialog" hidden onclick="if (event.target === this) closeDialog(false)">
+        <div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="dialogText">
+            <p id="dialogText"></p>
+            <input type="text" id="dialogInput" maxlength="200" hidden autocomplete="off" aria-labelledby="dialogText">
+            <div class="dialog-buttons">
+                <button class="dialog-cancel" id="dialogCancel" onclick="closeDialog(false)">Cancel</button>
+                <button id="dialogOk" onclick="closeDialog(true)">OK</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const SETTINGS_KEY = 'droneBrotherSettings';
+
+        // ---- The app's own dialog box ----
+        // In place of the browser's plain alert, confirm and prompt boxes. ask() answers true or
+        // false, or with { input } the text typed (null if cancelled); notice() just tells.
+        let dialogDone = null;
+
+        function ask(message, { input = null, ok = 'OK', cancel = 'Cancel' } = {}) {
+            if (dialogDone) dialogDone(false);
+            const field = document.getElementById('dialogInput');
+            document.getElementById('dialogText').textContent = message;
+            field.hidden = input === null;
+            field.value = input ?? '';
+            document.getElementById('dialogOk').textContent = ok;
+            const cancelButton = document.getElementById('dialogCancel');
+            cancelButton.hidden = cancel === null;
+            cancelButton.textContent = cancel || '';
+            document.getElementById('dialog').hidden = false;
+            if (input === null) document.getElementById('dialogOk').focus();
+            else {
+                field.focus();
+                field.select();
+            }
+            return new Promise(resolve => {
+                dialogDone = answered => {
+                    document.getElementById('dialog').hidden = true;
+                    dialogDone = null;
+                    resolve(input === null ? answered : answered ? field.value : null);
+                };
+            });
+        }
+
+        function notice(message) {
+            return ask(message, { cancel: null });
+        }
+
+        function closeDialog(answered) {
+            if (dialogDone) dialogDone(answered);
+        }
+
+        document.addEventListener('keydown', event => {
+            if (document.getElementById('dialog').hidden) return;
+            if (event.key === 'Escape') closeDialog(false);
+            if (event.key === 'Enter' && event.target.id !== 'dialogCancel') {
+                event.preventDefault();
+                closeDialog(true);
+            }
+        });
+
         const MY_PRESETS_KEY = 'droneMyPresets';
         const DELETED_KEY = 'droneDeletedPresets';
         const SYNC_KEY = 'droneSync';
@@ -1340,6 +1474,7 @@
         // On a keyboard, the space bar plays and pauses (unless you're typing somewhere)
         document.addEventListener('keydown', event => {
             if (event.code !== 'Space' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+            if (!document.getElementById('dialog').hidden) return;
             const el = event.target;
             if (el.isContentEditable || el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['range', 'checkbox', 'radio', 'button'].includes(el.type))) return;
             event.preventDefault();
@@ -1440,17 +1575,17 @@
             return myPresets.find(p => p.id === settings.preset);
         }
 
-        function askName(message, suggestion) {
-            const name = prompt(message, suggestion);
+        async function askName(message, suggestion) {
+            const name = await ask(message, { input: suggestion, ok: 'Save' });
             return name === null ? null : name.trim().slice(0, 40);
         }
 
-        function savePreset() {
+        async function savePreset() {
             const octaveName = OCTAVES.find(([, octave]) => octave === settings.octave)[0].toLowerCase();
-            const name = askName('Name this preset:', `${KEYS[settings.key]} ${octaveName}`);
+            const name = await askName('Name this preset:', `${KEYS[settings.key]} ${octaveName}`);
             if (!name) return;
             let preset = myPresets.find(p => p.name.toLowerCase() === name.toLowerCase());
-            if (preset && !confirm(`Replace your "${preset.name}" with these settings?`)) return;
+            if (preset && !(await ask(`Replace your "${preset.name}" with these settings?`, { ok: 'Replace' }))) return;
             if (!preset) {
                 preset = { id: newId() };
                 myPresets.push(preset);
@@ -1471,10 +1606,10 @@
             grid.scrollTop = chip.offsetTop - grid.clientHeight / 2;
         }
 
-        function renamePreset() {
+        async function renamePreset() {
             const preset = selectedMyPreset();
             if (!preset) return;
-            const name = askName('Rename this preset:', preset.name);
+            const name = await askName('Rename this preset:', preset.name);
             if (!name || name === preset.name) return;
             preset.name = name;
             preset.updated = Date.now();
@@ -1483,9 +1618,9 @@
             render();
         }
 
-        function deletePreset() {
+        async function deletePreset() {
             const preset = selectedMyPreset();
-            if (!preset || !confirm(`Delete "${preset.name}"? Your settings stay as they are.`)) return;
+            if (!preset || !(await ask(`Delete "${preset.name}"? Your settings stay as they are.`, { ok: 'Delete' }))) return;
             myPresets = myPresets.filter(p => p !== preset);
             deleted[preset.id] = Date.now();
             settings.preset = null;
@@ -1758,7 +1893,7 @@
         async function connectSync(givenToken) {
             const token = (givenToken || document.getElementById('syncToken').value).trim();
             if (!token) {
-                alert('Paste your GitHub token first.');
+                notice('Paste your GitHub token first.');
                 return;
             }
             document.getElementById('connectBtn').textContent = 'Connecting…';
@@ -1777,7 +1912,7 @@
                 document.getElementById('syncToken').value = '';
                 await syncNow(false);
             } catch (err) {
-                alert(err.message || 'Could not reach GitHub.');
+                notice(err.message || 'Could not reach GitHub.');
             }
             document.getElementById('connectBtn').textContent = 'Turn On Sync';
             renderSync();
@@ -1793,8 +1928,8 @@
             if (config) connectSync(config.token);
         }
 
-        function disconnectSync() {
-            if (!confirm('Turn off sync on this device? Your presets stay here, and the copy on GitHub stays too.')) return;
+        async function disconnectSync() {
+            if (!(await ask('Turn off sync on this device? Your presets stay here, and the copy on GitHub stays too.', { ok: 'Turn off' }))) return;
             setSyncConfig(null);
             renderSync();
         }
@@ -1803,9 +1938,9 @@
             const config = syncConfig();
             try {
                 await navigator.clipboard.writeText(config.token);
-                alert('Token copied. Paste it into Drone (or Gas) on your other device.');
+                notice('Token copied. Paste it into Drone (or Gas) on your other device.');
             } catch (err) {
-                prompt('Copy this token:', config.token);
+                ask('Copy this token:', { input: config.token, cancel: null });
             }
         }
 
