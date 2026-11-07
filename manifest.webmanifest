@@ -1,7 +1,7 @@
 {
   "name": "Drone",
   "short_name": "Drone",
-  "description": "A shruti-box style drone for practicing, in just intonation, with fine tuning.",
+  "description": "A shruti-box style drone to practice against, in just intonation. Pick a key, mix in the voices you want, and let them mingle. Presets for Front Porch, Cross A, Singing Bowl and more.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
