@@ -816,8 +816,8 @@
         // The 6th is 27:16 (a pure whole step above the 5th) rather than 5:3, which sounds flat
         // against open strings. The 7th is the flat seventh, 16:9 (a pure 4th above the 4th).
         const VOICES = [
-            { id: 'low', label: 'Low root', ratio: [1, 2], level: 70, color: 'var(--indigo)' },
-            { id: 'lowfourth', label: 'Low 4th', ratio: [2, 3], level: 50, color: 'var(--slate)' },
+            { id: 'low', label: 'Low root', ratio: [1, 2], level: 70, color: 'var(--indigo)', warm: true },
+            { id: 'lowfourth', label: 'Low 4th', ratio: [2, 3], level: 50, color: 'var(--slate)', warm: true },
             { id: 'root', label: 'Root', ratio: [1, 1], level: 100, color: 'var(--rust)' },
             { id: 'fourth', label: '4th', ratio: [4, 3], level: 55, color: 'var(--ochre)' },
             { id: 'fifth', label: '5th', ratio: [3, 2], level: 80, color: 'var(--green)' },
@@ -984,6 +984,27 @@
             return context.createPeriodicWave(real, imag);
         }
 
+        // The low voices get a rounder wave. A reed's buzzy upper harmonics, an octave down, crowd
+        // into the range where the ear hears them as rasp (the lawnmower). This one keeps a
+        // singing run of low overtones (2nd to 6th, the ones an overtone singer finds) and lets
+        // everything above fall away fast, with even and odd harmonics alike, more bowed than buzzed.
+        function warmWave(context) {
+            const count = 24;
+            const real = new Float32Array(count + 1);
+            const imag = new Float32Array(count + 1);
+            const random = seededRandom(5);
+            for (let n = 1; n <= count; n++) {
+                let amp = Math.pow(n, -1.2);
+                if (n === 1) amp *= 0.8;                         // the fundamental steps back a little
+                if (n >= 2 && n <= 8) amp *= 1.5 - 0.04 * n;    // a soft glow of overtones
+                if (n > 14) amp *= Math.pow(14 / n, 1.2);        // and a quicker fall above them
+                const phase = random() * Math.PI * 2;
+                real[n] = amp * Math.sin(phase);
+                imag[n] = amp * Math.cos(phase);
+            }
+            return context.createPeriodicWave(real, imag);
+        }
+
         function softClipCurve(drive) {
             const curve = new Float32Array(2048);
             for (let i = 0; i < curve.length; i++) {
@@ -1033,6 +1054,10 @@
             // Everything feeds the buzz through here, so the drive can ease off as voices stack up
             const mix = context.createGain();
             mix.connect(buzz);
+            // The low voices mostly skip the buzz: distortion on a low note is what made it rattle.
+            // This path matches the buzz's own gain on quiet signals, so loudness holds.
+            const clean = context.createGain();
+            clean.connect(tone);
 
             // Bellows: two slow LFOs at unrelated rates, so the movement never quite repeats
             const lfoA = context.createOscillator();
@@ -1102,15 +1127,17 @@
             undertowB.connect(undertowDrive).connect(mix.gain);
             [undertowA, undertowB].forEach(lfo => lfo.start(now));
 
-            const eng = { ctx: context, wave: reedWave(context), buzz, mix, master, tone, nasal2, ampDepth, filterDepth, filterDepthB, bloomToneDepth, undertowVolume, undertowDrive, air, airGain, voices: {}, lastRoot: null, last: {} };
+            const eng = { ctx: context, wave: reedWave(context), warmWave: warmWave(context), buzz, mix, clean, master, tone, nasal2, ampDepth, filterDepth, filterDepthB, bloomToneDepth, undertowVolume, undertowDrive, air, airGain, voices: {}, lastRoot: null, last: {} };
             // A spare reed bank for Mingle's wandering notes
             eng.wanderers = WANDER_DETUNES.map(detunes => makeReeds(eng, detunes));
             return eng;
         }
 
         // Three reeds -> level gain -> swell (each voice blooms and sinks over a minute or more, at
-        // its own rate) -> duck gain (Mingle dips a voice a touch while it's wandering) -> buzz
-        function makeReeds(eng, detunes, seed) {
+        // its own rate) -> duck gain (Mingle dips a voice a touch while it's wandering) -> buzz.
+        // warm (the low voices): a rounder wave, a filter that follows the pitch, a slow wander in
+        // tuning so the reeds breathe instead of pulse, and only a little of it goes to the buzz.
+        function makeReeds(eng, detunes, seed, warm) {
             const c = eng.ctx;
             const gain = c.createGain();
             gain.gain.value = 0;
@@ -1123,20 +1150,50 @@
             bloom.connect(bloomDepth).connect(swell.gain);
             bloom.start(c.currentTime);
             const duck = c.createGain();
-            gain.connect(swell).connect(duck).connect(eng.mix);
+            let soften = null;
+            if (warm) {
+                soften = c.createBiquadFilter();
+                soften.type = 'lowpass';
+                soften.Q.value = 0.5;
+                soften.frequency.value = 600;
+                gain.connect(soften).connect(swell).connect(duck);
+                const grit = c.createGain();
+                grit.gain.value = 0.2;
+                const smooth = c.createGain();
+                smooth.gain.value = 0.8 * 1.9;   // the buzz's small-signal gain is about 1.9
+                duck.connect(grit).connect(eng.mix);
+                duck.connect(smooth).connect(eng.clean);
+            } else {
+                gain.connect(swell).connect(duck).connect(eng.mix);
+            }
+            // Slow, uneven drift in each reed's tuning (a cent or two over ten to twenty seconds)
+            let drift = null;
+            if (warm) {
+                drift = [c.createOscillator(), c.createOscillator()];
+                drift[0].frequency.value = 0.053 + 0.011 * (seed % 3);
+                drift[1].frequency.value = 0.089 + 0.007 * (seed % 4);
+                drift.forEach(lfo => lfo.start(c.currentTime));
+            }
             const oscillators = detunes.map((detune, r) => {
                 const osc = c.createOscillator();
-                osc.setPeriodicWave(eng.wave);
+                osc.setPeriodicWave(warm ? eng.warmWave : eng.wave);
+                if (drift) {
+                    [[1.4, -0.6, 1.1][r], [-0.5, 1.2, -0.9][r]].forEach((depth, k) => {
+                        const amount = c.createGain();
+                        amount.gain.value = depth;
+                        drift[k].connect(amount).connect(osc.detune);
+                    });
+                }
                 osc.detune.value = detune;
                 const reedGain = c.createGain();
-                reedGain.gain.value = 0.11;
+                reedGain.gain.value = warm ? 0.1 : 0.11;
                 const pan = c.createStereoPanner();
-                pan.pan.value = [-0.45, 0, 0.45][r];
+                pan.pan.value = [-0.45, 0, 0.45][r] * (warm ? 0.6 : 1);
                 osc.connect(reedGain).connect(pan).connect(gain);
                 osc.start(c.currentTime);
                 return osc;
             });
-            return { gain, duck, oscillators, detunes, busyUntil: -1, sourceId: null };
+            return { gain, duck, soften, oscillators, detunes, busyUntil: -1, sourceId: null };
         }
 
         function stirUndertow(eng, t) {
@@ -1157,7 +1214,7 @@
 
         // Voices are only built once they're first turned on, to spare the phone's processor
         function voiceNodes(eng, voice) {
-            if (!eng.voices[voice.id]) eng.voices[voice.id] = makeReeds(eng, REED_DETUNES[VOICES.indexOf(voice)], VOICES.indexOf(voice));
+            if (!eng.voices[voice.id]) eng.voices[voice.id] = makeReeds(eng, REED_DETUNES[VOICES.indexOf(voice)], VOICES.indexOf(voice), voice.warm);
             return eng.voices[voice.id];
         }
 
@@ -1213,8 +1270,11 @@
             const slow = immediate ? 0.001 : 1.2;
             VOICES.forEach(voice => {
                 if (!settings.voices[voice.id] && !eng.voices[voice.id]) return;
-                const { gain, oscillators } = voiceNodes(eng, voice);
+                const { gain, oscillators, soften } = voiceNodes(eng, voice);
                 oscillators.forEach(osc => osc.frequency.setTargetAtTime(root * ratioOf(voice), t, glide));
+                // Keeps the first eight or so overtones, opening a little with Tone. A floor keeps a
+                // very low note's overtones up where a phone speaker can still sound them.
+                if (soften) soften.frequency.setTargetAtTime(Math.max(root * ratioOf(voice) * (6 + settings.tone / 100 * 5), 500 + settings.tone * 5), t, glide);
                 const on = Boolean(settings.voices[voice.id]);
                 const toggled = last[voice.id] !== undefined && last[voice.id].on !== on;
                 const moved = last[voice.id] !== undefined && last[voice.id].level !== settings.levels[voice.id];
@@ -1226,6 +1286,7 @@
             const cutoff = toneCutoff();
             const toneMoved = last.tone !== undefined && last.tone !== settings.tone;
             eng.mix.gain.setTargetAtTime(stackDrive(), t, slow);
+            eng.clean.gain.setTargetAtTime(stackDrive(), t, slow);
             const breath = settings.breath / 100;
             eng.tone.frequency.setTargetAtTime(cutoff, t, immediate || toneMoved ? 0.08 : slow);
             eng.bloomToneDepth.gain.setTargetAtTime(cutoff * 0.08, t, 0.5);

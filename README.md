@@ -10,6 +10,7 @@ A shruti-box style drone. Pick a key, mix in whichever voices you want, and play
 - **Ten voices**, each with its own level slider: low root, low 4th, root, 4th, 5th, 6th, ♭7th, octave, 9th and 10th. **reset** puts the voices and Mingle back the way the last preset you picked has them (and **reset** under Sound does the same for tone and breath).
 - **Mingle:** now and then, a voice strays, and finds its way back, or glides from one voice that's on to another and settles there. Turn it up and the strays come more often and stand out more; down low they're rare and faint.
 - **Fine tune** up or down by single cents (±50). The slider catches on A = 432, 435, 440, 442, 443 and 444.
+- **The low voices** (low root and low 4th) have their own rounder sound: a run of soft overtones on top, no rasp, mostly kept clear of the reeds' buzz, and a slow drift in tuning so they breathe.
 - **Tone** runs from dark to bright (and airier). **Breath** runs from still to shimmering: the reeds beat against each other more.
 - The space bar plays and pauses on a keyboard. Open it with a key already set: `mgilvryallen.github.io/drone/#key=A` (Tunes uses this).
 
